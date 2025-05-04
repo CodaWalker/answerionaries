@@ -43,6 +43,8 @@ const CreateTestModal = ({ isOpen, onClose, testToEdit }: CreateTestModalProps) 
       setTitle(testToEdit.title);
       setDescription(testToEdit.description || "");
       setIsEditing(true);
+      // При редактировании теста, всегда открываем первую страницу
+      setCurrentPage(1);
       
       // Преобразуем вопросы и варианты ответов в нужный формат
       const formattedQuestions = testToEdit.questions.map(q => ({

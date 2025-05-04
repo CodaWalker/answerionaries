@@ -114,7 +114,20 @@ const TestsPage = () => {
   
   const confirmDeleteTest = () => {
     if (testToDelete) {
-      deleteTestMutation.mutate(testToDelete.id);
+      // Проверяем, является ли элемент последним на странице
+      const isLastOnPage = paginatedTests.length === 1;
+      // Проверяем, находимся ли мы на последней странице
+      const isLastPage = currentPage === totalPages;
+      
+      deleteTestMutation.mutate(testToDelete.id, {
+        onSuccess: () => {
+          // Если это был последний элемент на последней странице и не первая страница,
+          // переходим на предыдущую страницу
+          if (isLastOnPage && isLastPage && currentPage > 1) {
+            setCurrentPage(currentPage - 1);
+          }
+        }
+      });
       setTestToDelete(null);
     }
   };
