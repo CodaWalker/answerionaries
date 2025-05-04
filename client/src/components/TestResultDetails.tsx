@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { LocalTestResult } from "@/lib/storage";
 import { TestWithQuestions } from "@shared/schema";
@@ -20,9 +21,14 @@ const TestResultDetails = ({ isOpen, onClose, result }: TestResultDetailsProps) 
   const [expandedQuestions, setExpandedQuestions] = useState<Record<number, boolean>>({});
   
   // Получаем полные данные теста, чтобы отобразить правильные ответы
-  const { data: testData } = useQuery<TestWithQuestions>({
+  const { data: testData, isLoading, error } = useQuery<TestWithQuestions>({
     queryKey: [`/api/tests/${result.testId}/full`],
     enabled: isOpen,
+    retry: 3,
+    retryDelay: 1000,
+    onError: (err) => {
+      console.error('Error fetching test details:', err);
+    }
   });
   
   // Рассчитываем статистику
@@ -32,16 +38,22 @@ const TestResultDetails = ({ isOpen, onClose, result }: TestResultDetailsProps) 
   const grade = percentage >= 80 ? "Отлично" : percentage >= 60 ? "Хорошо" : percentage >= 40 ? "Удовлетворительно" : "Неудовлетворительно";
   
   // Находим список вопросов с неправильными ответами
-  const incorrectQuestions = testData?.questions.filter((question) => {
-    const userAnswers = result.answers[question.id] || [];
-    const correctOptionIds = question.options
-      .filter(option => option.isCorrect)
-      .map(option => option.id);
+  const incorrectQuestions = useMemo(() => {
+    if (!testData || !testData.questions || !result.answers) return [];
     
-    // Проверяем соответствие ответов пользователя правильным ответам
-    if (userAnswers.length !== correctOptionIds.length) return true;
-    return !userAnswers.every(answerId => correctOptionIds.includes(answerId));
-  });
+    return testData.questions.filter((question) => {
+      if (!question.id || !Array.isArray(question.options)) return false;
+      
+      const userAnswers = result.answers[question.id] || [];
+      const correctOptionIds = question.options
+        .filter(option => option.isCorrect)
+        .map(option => option.id);
+      
+      // Проверяем соответствие ответов пользователя правильным ответам
+      if (userAnswers.length !== correctOptionIds.length) return true;
+      return !userAnswers.every(answerId => correctOptionIds.includes(answerId));
+    });
+  }, [testData, result.answers]);
   
   const toggleQuestion = (questionId: number) => {
     setExpandedQuestions(prev => ({
