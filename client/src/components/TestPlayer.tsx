@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertResultSchema, TestWithQuestions, TestSession } from "@shared/schema";
 import { useAppContext } from "@/context/AppContext";
-import { saveTestResult } from "@/lib/storage";
+import { saveTestResult, saveTestSession, deleteTestSession } from "@/lib/storage";
 
 type TestPlayerProps = {
   isOpen: boolean;
@@ -241,28 +241,69 @@ const TestPlayer = ({ isOpen, onClose, testId, resumeSession }: TestPlayerProps)
   const handleAnswerSelect = (questionId: number, optionId: number, isMultiple: boolean) => {
     setAnswers(prev => {
       const currentAnswers = prev[questionId] || [];
+      let newAnswers;
       
       if (isMultiple) {
         // Для множественного выбора
         if (currentAnswers.includes(optionId)) {
-          return {
+          newAnswers = {
             ...prev,
             [questionId]: currentAnswers.filter(id => id !== optionId)
           };
         } else {
-          return {
+          newAnswers = {
             ...prev,
             [questionId]: [...currentAnswers, optionId]
           };
         }
       } else {
         // Для одиночного выбора
-        return {
+        newAnswers = {
           ...prev,
           [questionId]: [optionId]
         };
+        
+        // Если это одиночный выбор, автоматически переходим к следующему вопросу
+        setTimeout(() => {
+          if (currentQuestionIndex < questions.length - 1) {
+            handleNextQuestion();
+          } else {
+            calculateScore();
+          }
+        }, 500); // Добавляем небольшую задержку для анимации выбора
       }
+      
+      return newAnswers;
     });
+    
+    // Если текущий тест существует, сохраняем состояние сессии
+    if (currentTest) {
+      setTimeout(() => {
+        const updatedAnswers = {...answers};
+        if (!isMultiple) {
+          updatedAnswers[questionId] = [optionId];
+        } else if (updatedAnswers[questionId]?.includes(optionId)) {
+          updatedAnswers[questionId] = updatedAnswers[questionId].filter(id => id !== optionId);
+        } else {
+          updatedAnswers[questionId] = [...(updatedAnswers[questionId] || []), optionId];
+        }
+        
+        const session: TestSession = {
+          testId: currentTest.id,
+          currentQuestionIndex,
+          answers: updatedAnswers,
+          totalQuestions: currentTest.questions.length,
+          startTime: startTime || undefined,
+          pausedTime,
+          lastPauseTime,
+          isPaused,
+          correctAnswers,
+          wrongAnswers
+        };
+        
+        saveTestSession(currentTest.id, session);
+      }, 100);
+    }
   };
   
   // Проверяем, выбран ли вариант ответа
@@ -363,9 +404,22 @@ const TestPlayer = ({ isOpen, onClose, testId, resumeSession }: TestPlayerProps)
       };
       
       setTestSession(session);
-    } else {
-      // Сброс сессии при показе результатов или уже на паузе
+      
+      // Принудительное сохранение сессии в локальное хранилище
+      saveTestSession(currentTest!.id, session);
+    } else if (showResults) {
+      // Сброс сессии при показе результатов
       setTestSession(null);
+      
+      // Удаляем сохраненную сессию из локального хранилища
+      if (currentTest) {
+        deleteTestSession(currentTest.id);
+      }
+    } else if (isPaused) {
+      // Если уже на паузе, убедимся, что сессия сохранена
+      if (currentTest && testSession) {
+        saveTestSession(currentTest.id, testSession);
+      }
     }
     
     // Очистка интервала
@@ -393,61 +447,76 @@ const TestPlayer = ({ isOpen, onClose, testId, resumeSession }: TestPlayerProps)
     const percentage = (score.correct / score.total) * 100;
     let resultMessage = "";
     let resultColor = "";
+    let resultBgClass = "";
     
     if (percentage >= 80) {
       resultMessage = "Отличный результат!";
       resultColor = "text-green-600 dark:text-green-400";
+      resultBgClass = "bg-green-50 dark:bg-green-900/30";
     } else if (percentage >= 60) {
       resultMessage = "Хороший результат!";
       resultColor = "text-blue-600 dark:text-blue-400";
+      resultBgClass = "bg-blue-50 dark:bg-blue-900/30";
     } else if (percentage >= 40) {
       resultMessage = "Неплохой результат, но можно лучше!";
       resultColor = "text-yellow-600 dark:text-yellow-400";
+      resultBgClass = "bg-yellow-50 dark:bg-yellow-900/30";
     } else {
       resultMessage = "Стоит повторить материал.";
       resultColor = "text-red-600 dark:text-red-400";
+      resultBgClass = "bg-red-50 dark:bg-red-900/30";
     }
     
     const totalTime = startTime ? new Date().getTime() - startTime.getTime() - pausedTime : 0;
     
     return (
       <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Результаты теста: {test.title}</DialogTitle>
+            <DialogTitle className="text-2xl font-bold text-center text-primary mb-2">Результаты теста</DialogTitle>
+            <p className="text-center text-lg text-gray-600 dark:text-gray-400">{test.title}</p>
           </DialogHeader>
           
-          <div className="py-6 text-center">
-            <h3 className="text-xl font-semibold mb-4">Ваш результат</h3>
-            
-            <div className="mb-6">
-              <div className="flex justify-center items-center text-5xl font-bold mb-2">
-                <span className={resultColor}>{score.correct}</span>
-                <span className="text-gray-400 mx-2">/</span>
-                <span>{score.total}</span>
-              </div>
-              <div className="text-lg mb-4">
-                <span className={resultColor}>{percentage.toFixed(0)}%</span>
-              </div>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">{resultMessage}</p>
+          <div className="py-8 text-center">
+            <div className={`p-8 rounded-xl ${resultBgClass} mb-8`}>
+              <h3 className="text-2xl font-bold mb-6">Ваш результат</h3>
               
-              <Progress value={percentage} className="h-3 w-full max-w-md mx-auto" />
+              <div className="mb-6">
+                <div className="flex justify-center items-center text-6xl font-bold mb-4">
+                  <span className={resultColor}>{score.correct}</span>
+                  <span className="text-gray-400 mx-3">/</span>
+                  <span>{score.total}</span>
+                </div>
+                <div className="text-xl mb-4">
+                  <span className={`${resultColor} font-semibold`}>{percentage.toFixed(0)}%</span>
+                </div>
+                <p className="text-lg font-medium mb-6">{resultMessage}</p>
+                
+                <Progress value={percentage} className="h-4 w-full max-w-md mx-auto" />
+              </div>
             </div>
             
-            <div className="flex justify-center mt-4 mb-6">
-              <div className="flex items-center">
-                <Clock className="w-5 h-5 mr-2 text-gray-500" />
-                <span className="text-gray-700 dark:text-gray-300">
+            <div className="flex justify-center items-center gap-8 mb-8">
+              <div className="flex items-center bg-gray-100 dark:bg-gray-800 px-4 py-3 rounded-xl">
+                <Clock className="w-6 h-6 mr-3 text-primary" />
+                <span className="text-lg font-semibold text-gray-700 dark:text-gray-300">
                   Время: {formatTime(totalTime)}
+                </span>
+              </div>
+              
+              <div className="flex items-center bg-gray-100 dark:bg-gray-800 px-4 py-3 rounded-xl">
+                <Check className="w-6 h-6 mr-3 text-green-500" />
+                <span className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+                  Верно: {score.correct} из {score.total}
                 </span>
               </div>
             </div>
             
             <div className="flex flex-col sm:flex-row justify-center gap-4 mt-8">
-              <Button variant="outline" onClick={handleRetry}>
+              <Button variant="outline" onClick={handleRetry} className="px-6 py-3 h-14 text-lg font-medium" size="lg">
                 Пройти еще раз
               </Button>
-              <Button onClick={handleClose}>
+              <Button onClick={handleClose} className="px-6 py-3 h-14 text-lg font-medium bg-primary hover:bg-primary/90" size="lg">
                 Завершить
               </Button>
             </div>
@@ -460,48 +529,49 @@ const TestPlayer = ({ isOpen, onClose, testId, resumeSession }: TestPlayerProps)
   // Отображение вопроса
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Тест: {test.title}</DialogTitle>
+          <DialogTitle className="text-xl font-bold text-primary">{test.title}</DialogTitle>
         </DialogHeader>
         
         {/* Прогресс теста и таймер */}
         <div className="mb-6">
           <div className="flex justify-between items-center mb-2">
             <div className="flex items-center">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
-                Прогресс: {currentQuestionIndex + 1} из {questions.length}
+              <span className="text-base font-medium text-gray-700 dark:text-gray-300 mr-2">
+                Вопрос {currentQuestionIndex + 1} из {questions.length}
               </span>
               {isPaused && (
-                <Badge variant="secondary" className="ml-2">
+                <Badge variant="outline" className="ml-2 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">
                   <Pause className="w-3 h-3 mr-1" /> На паузе
                 </Badge>
               )}
             </div>
-            <div className="flex items-center">
-              <Clock className="w-4 h-4 mr-1 text-gray-500" />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-3">
+            <div className="flex items-center bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">
+              <Clock className="w-5 h-5 mr-2 text-primary" />
+              <span className="text-base font-semibold text-gray-700 dark:text-gray-300">
                 {formatTime(elapsedTime)}
-              </span>
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {progress.toFixed(0)}%
               </span>
             </div>
           </div>
-          <Progress value={progress} className="h-2.5" />
+          <Progress value={progress} className="h-3 bg-gray-200 dark:bg-gray-700" />
         </div>
         
         {/* Содержимое вопроса */}
-        <div className="mb-6">
-          <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+        <div className="mb-8 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+          <h4 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
             {currentQuestionIndex + 1}. {currentQuestion.text}
           </h4>
           
           {isMultipleChoice(currentQuestion) ? (
             // Множественный выбор (чекбоксы)
-            <div className="space-y-3">
+            <div className="space-y-4">
               {currentQuestion.options.map((option) => (
-                <div key={option.id} className="flex items-center">
+                <div 
+                  key={option.id} 
+                  className={`flex items-center p-4 border rounded-lg cursor-pointer transition-colors ${isOptionSelected(currentQuestion.id, option.id) ? 'bg-primary-50 dark:bg-primary-900 border-primary-300 dark:border-primary-700' : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                  onClick={() => handleAnswerSelect(currentQuestion.id, option.id, true)}
+                >
                   <Checkbox
                     id={`q${currentQuestion.id}_option${option.id}`}
                     checked={isOptionSelected(currentQuestion.id, option.id)}
@@ -510,41 +580,45 @@ const TestPlayer = ({ isOpen, onClose, testId, resumeSession }: TestPlayerProps)
                         handleAnswerSelect(currentQuestion.id, option.id, true);
                       }
                     }}
-                    className="mr-2"
+                    className="mr-3 h-5 w-5"
                   />
                   <Label
                     htmlFor={`q${currentQuestion.id}_option${option.id}`}
-                    className="text-sm font-medium text-gray-900 dark:text-gray-300 cursor-pointer"
+                    className="text-base text-gray-900 dark:text-gray-300 cursor-pointer w-full"
                   >
                     {option.text}
                   </Label>
                 </div>
               ))}
               
-              <div className="flex items-center mt-4 text-yellow-600 dark:text-yellow-400">
-                <AlertTriangle className="w-4 h-4 mr-2" />
-                <span className="text-xs">Выберите все подходящие варианты</span>
+              <div className="flex items-center mt-6 text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/30 p-3 rounded-md">
+                <AlertTriangle className="w-5 h-5 mr-2 flex-shrink-0" />
+                <span className="text-sm">Выберите все подходящие варианты и нажмите «Далее»</span>
               </div>
             </div>
           ) : (
-            // Одиночный выбор (радиокнопки)
+            // Одиночный выбор (большие кнопки)
             <RadioGroup
               value={answers[currentQuestion.id]?.[0]?.toString() || ""}
               onValueChange={(value) => 
                 handleAnswerSelect(currentQuestion.id, parseInt(value), false)
               }
-              className="space-y-3"
+              className="space-y-4"
             >
               {currentQuestion.options.map((option) => (
-                <div key={option.id} className="flex items-center">
+                <div 
+                  key={option.id} 
+                  className={`flex items-center p-4 border rounded-lg cursor-pointer transition-colors ${isOptionSelected(currentQuestion.id, option.id) ? 'bg-primary-50 dark:bg-primary-900 border-primary-300 dark:border-primary-700' : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                  onClick={() => handleAnswerSelect(currentQuestion.id, option.id, false)}
+                >
                   <RadioGroupItem
                     id={`q${currentQuestion.id}_option${option.id}`}
                     value={option.id.toString()}
-                    className="mr-2"
+                    className="mr-3 h-5 w-5"
                   />
                   <Label
                     htmlFor={`q${currentQuestion.id}_option${option.id}`}
-                    className="text-sm font-medium text-gray-900 dark:text-gray-300 cursor-pointer"
+                    className="text-base text-gray-900 dark:text-gray-300 cursor-pointer w-full"
                   >
                     {option.text}
                   </Label>
@@ -554,56 +628,72 @@ const TestPlayer = ({ isOpen, onClose, testId, resumeSession }: TestPlayerProps)
           )}
         </div>
         
-        <DialogFooter className="flex flex-col sm:flex-row justify-between gap-3">
-          <div className="flex gap-2">
+        <DialogFooter className="flex flex-col md:flex-row justify-between gap-4 mt-4">
+          <div className="flex gap-3">
             <Button
               variant="outline"
               onClick={handlePrevQuestion}
               disabled={currentQuestionIndex === 0 || isPaused}
+              className="px-6 py-2 h-12 text-base font-medium"
+              size="lg"
             >
-              <ChevronLeft className="w-4 h-4 mr-2" />
+              <ChevronLeft className="w-5 h-5 mr-2" />
               Назад
             </Button>
             
             <Button
               variant={isPaused ? "default" : "outline"}
               onClick={handleTogglePause}
+              className={`px-6 py-2 h-12 text-base font-medium ${isPaused ? 'bg-green-600 hover:bg-green-700' : ''}`}
+              size="lg"
             >
               {isPaused ? (
                 <>
-                  <Play className="w-4 h-4 mr-2" />
+                  <Play className="w-5 h-5 mr-2" />
                   Продолжить
                 </>
               ) : (
                 <>
-                  <Pause className="w-4 h-4 mr-2" />
+                  <Pause className="w-5 h-5 mr-2" />
                   Пауза
                 </>
               )}
             </Button>
           </div>
           
-          <div className="flex gap-2 sm:ml-auto">
+          <div className="flex gap-3 md:ml-auto">
             <Button 
               variant="destructive" 
               onClick={handleFinishTest}
               disabled={isPaused}
+              className="px-6 py-2 h-12 text-base font-medium"
+              size="lg"
             >
               Завершить досрочно
-              <ExternalLink className="w-4 h-4 ml-2" />
+              <ExternalLink className="w-5 h-5 ml-2" />
             </Button>
             
-            {currentQuestionIndex < questions.length - 1 ? (
-              <Button onClick={handleNextQuestion} disabled={isPaused}>
+            {isMultipleChoice(currentQuestion) && currentQuestionIndex < questions.length - 1 ? (
+              <Button 
+                onClick={handleNextQuestion} 
+                disabled={isPaused}
+                className="px-6 py-2 h-12 text-base font-medium bg-primary hover:bg-primary/90"
+                size="lg"
+              >
                 Далее
-                <ChevronRight className="w-4 h-4 ml-2" />
+                <ChevronRight className="w-5 h-5 ml-2" />
               </Button>
-            ) : (
-              <Button onClick={handleNextQuestion} disabled={isPaused}>
+            ) : isMultipleChoice(currentQuestion) ? (
+              <Button 
+                onClick={handleNextQuestion} 
+                disabled={isPaused}
+                className="px-6 py-2 h-12 text-base font-medium bg-primary hover:bg-primary/90"
+                size="lg"
+              >
                 Завершить
-                <Check className="w-4 h-4 ml-2" />
+                <Check className="w-5 h-5 ml-2" />
               </Button>
-            )}
+            ) : null}
           </div>
         </DialogFooter>
       </DialogContent>
