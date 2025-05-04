@@ -254,9 +254,19 @@ const parseQuestions = (text: string): { isValid: boolean; questions?: CSVQuesti
     
     // Проверка на дубликаты question_id
     const questionIds = result.data.map(q => q.question_id);
-    const uniqueQuestionIds = [...new Set(questionIds)];
+    const uniqueIds = new Map();
+    let hasDuplicates = false;
     
-    if (uniqueQuestionIds.length !== questionIds.length) {
+    // Проверка на дубликаты без использования Set
+    for (const id of questionIds) {
+      if (uniqueIds.has(id)) {
+        hasDuplicates = true;
+        break;
+      }
+      uniqueIds.set(id, true);
+    }
+    
+    if (hasDuplicates) {
       return {
         isValid: false,
         error: "Найдены дубликаты question_id в секции вопросов"
@@ -342,9 +352,19 @@ const parseAnswers = (text: string): { isValid: boolean; answers?: CSVAnswer[]; 
     
     // Проверка на дубликаты question_id
     const answerIds = result.data.map(a => a.question_id);
-    const uniqueAnswerIds = [...new Set(answerIds)];
+    const uniqueIds = new Map();
+    let hasDuplicates = false;
     
-    if (uniqueAnswerIds.length !== answerIds.length) {
+    // Проверка на дубликаты без использования Set
+    for (const id of answerIds) {
+      if (uniqueIds.has(id)) {
+        hasDuplicates = true;
+        break;
+      }
+      uniqueIds.set(id, true);
+    }
+    
+    if (hasDuplicates) {
       return {
         isValid: false,
         error: "Найдены дубликаты question_id в секции ответов"

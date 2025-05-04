@@ -53,14 +53,14 @@ const ImportTestModal = ({ isOpen, onClose }: ImportTestModalProps) => {
   const [error, setError] = useState<string | null>(null);
   
   // Мутация для создания теста из CSV
-  const importMutation = useMutation({
-    mutationFn: async (data: {
-      test: InsertTest;
-      questions: Array<{
-        question: { text: string };
-        options: Array<{ text: string; isCorrect: boolean }>;
-      }>;
-    }) => {
+  const importMutation = useMutation<any, Error, {
+    test: InsertTest;
+    questions: Array<{
+      question: { text: string };
+      options: Array<{ text: string; isCorrect: boolean }>;
+    }>;
+  }>({
+    mutationFn: async (data) => {
       const response = await apiRequest('POST', '/api/tests/full', data);
       return response.json();
     },
@@ -227,15 +227,53 @@ const ImportTestModal = ({ isOpen, onClose }: ImportTestModalProps) => {
       setIsProcessing(true);
       setError(null);
       
+      // Проверка соответствия количества вопросов и ответов
+      const questionIds = questionsData.map(q => q.question_id);
+      const answerIds = answersData.map(a => a.question_id);
+      const missedQuestions = questionIds.filter(qId => !answerIds.includes(qId));
+      const extraAnswers = answerIds.filter(aId => !questionIds.includes(aId));
+      
+      // Если есть вопросы без ответов
+      if (missedQuestions.length > 0) {
+        setError(`Отсутствуют ответы для вопросов с ID: ${missedQuestions.join(', ')}`);
+        return;
+      }
+      
+      // Если есть ответы без вопросов
+      if (extraAnswers.length > 0) {
+        setError(`Найдены ответы для несуществующих вопросов с ID: ${extraAnswers.join(', ')}`);
+        return;
+      }
+      
       // Преобразуем данные в формат, подходящий для API
       const questionData = questionsData.map(q => {
         const questionId = q.question_id;
         const questionText = q.question;
-        const variants = q.variants.split(',');
+        const variants = q.variants.split(',').map(v => v.trim());
         
         // Ищем ответы для этого вопроса
         const answerItem = answersData.find(a => a.question_id === questionId);
-        const correctAnswers = answerItem ? answerItem.answers.split(',').map(Number) : [];
+        const correctAnswers = answerItem ? answerItem.answers.split(',').map(a => Number(a.trim())) : [];
+        
+        // Проверка корректности индексов ответов
+        for (const answerIdx of correctAnswers) {
+          if (isNaN(answerIdx) || answerIdx < 1 || answerIdx > variants.length) {
+            setError(`Неверный индекс ответа ${answerIdx} для вопроса ${questionId}. Должен быть от 1 до ${variants.length}`);
+            return null;
+          }
+        }
+        
+        // Проверка, что есть хотя бы один правильный ответ
+        if (correctAnswers.length === 0) {
+          setError(`Для вопроса ${questionId} не указан ни один правильный вариант ответа`);
+          return null;
+        }
+        
+        // Проверка, что не все варианты отмечены как правильные
+        if (correctAnswers.length === variants.length) {
+          setError(`Для вопроса ${questionId} все варианты отмечены как правильные`);
+          return null;
+        }
         
         // Создаем опции с указанием правильных ответов
         const options = variants.map((text, index) => ({
@@ -249,9 +287,20 @@ const ImportTestModal = ({ isOpen, onClose }: ImportTestModalProps) => {
         };
       });
       
+      // Проверяем, что нет никаких ошибок в вопросах
+      if (questionData.includes(null)) {
+        return; // Ошибка уже установлена в setError выше
+      }
+      
+      // Удаляем все null значения из массива вопросов
+      const validQuestionData = questionData.filter(question => question !== null) as {
+        question: { text: string };
+        options: { text: string; isCorrect: boolean }[];
+      }[];
+      
       const testData = {
         test: { title, description },
-        questions: questionData
+        questions: validQuestionData
       };
       
       // Отправляем данные на сервер
