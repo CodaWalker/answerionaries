@@ -171,6 +171,14 @@ const CreateTestModal = ({ isOpen, onClose, testToEdit }: CreateTestModalProps) 
     const updatedQuestions = [...questions];
     updatedQuestions.splice(index, 1);
     setQuestions(updatedQuestions);
+    
+    // Пересчитываем общее количество страниц после удаления вопроса
+    const totalPages = Math.ceil(updatedQuestions.length / QUESTIONS_PER_PAGE);
+    
+    // Если текущая страница больше чем новое количество страниц, переходим на последнюю страницу
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
   };
   
   const handleQuestionTextChange = (index: number, text: string) => {
