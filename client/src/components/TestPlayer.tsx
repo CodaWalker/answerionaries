@@ -293,9 +293,9 @@ const TestPlayer = ({ isOpen, onClose, testId, resumeSession }: TestPlayerProps)
           currentQuestionIndex,
           answers: updatedAnswers,
           totalQuestions: currentTest.questions.length,
-          startTime: startTime || undefined,
+          startTime: startTime ? startTime : undefined,
           pausedTime,
-          lastPauseTime,
+          lastPauseTime: lastPauseTime ? lastPauseTime : undefined,
           isPaused,
           correctAnswers,
           wrongAnswers
@@ -395,7 +395,7 @@ const TestPlayer = ({ isOpen, onClose, testId, resumeSession }: TestPlayerProps)
         currentQuestionIndex,
         answers,
         totalQuestions: currentTest!.questions.length,
-        startTime: startTime || undefined,
+        startTime: startTime ? startTime : undefined,
         pausedTime,
         lastPauseTime: new Date(),
         isPaused: true,
@@ -416,9 +416,21 @@ const TestPlayer = ({ isOpen, onClose, testId, resumeSession }: TestPlayerProps)
         deleteTestSession(currentTest.id);
       }
     } else if (isPaused) {
-      // Если уже на паузе, убедимся, что сессия сохранена
-      if (currentTest && testSession) {
-        saveTestSession(currentTest.id, testSession);
+      // Если уже на паузе, создаем и сохраняем текущую сессию
+      if (currentTest) {
+        const currentSession: TestSession = {
+          testId: currentTest.id,
+          currentQuestionIndex,
+          answers,
+          totalQuestions: currentTest.questions.length,
+          startTime: startTime ? startTime : undefined,
+          pausedTime,
+          lastPauseTime: lastPauseTime ? lastPauseTime : undefined,
+          isPaused: true,
+          correctAnswers,
+          wrongAnswers
+        };
+        saveTestSession(currentTest.id, currentSession);
       }
     }
     

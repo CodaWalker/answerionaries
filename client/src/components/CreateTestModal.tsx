@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { X, Plus, Save, Trash } from "lucide-react";
+import { X, Plus, Save, Trash, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,6 +34,8 @@ const CreateTestModal = ({ isOpen, onClose, testToEdit }: CreateTestModalProps) 
   const [description, setDescription] = useState("");
   const [questions, setQuestions] = useState<QuestionData[]>([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const QUESTIONS_PER_PAGE = 5; // Максимум 5 вопросов на странице
   
   // Эффект для заполнения данных при редактировании
   useEffect(() => {
@@ -144,7 +146,7 @@ const CreateTestModal = ({ isOpen, onClose, testToEdit }: CreateTestModalProps) 
   
   // Обработчики событий
   const handleAddQuestion = () => {
-    setQuestions([
+    const newQuestions = [
       ...questions,
       {
         text: "",
@@ -153,7 +155,14 @@ const CreateTestModal = ({ isOpen, onClose, testToEdit }: CreateTestModalProps) 
           { text: "", isCorrect: false }
         ]
       }
-    ]);
+    ];
+    setQuestions(newQuestions);
+    
+    // Переход к последней странице, если добавление нового вопроса создает новую страницу
+    const totalPages = Math.ceil(newQuestions.length / QUESTIONS_PER_PAGE);
+    if (totalPages > Math.ceil(questions.length / QUESTIONS_PER_PAGE)) {
+      setCurrentPage(totalPages);
+    }
   };
   
   const handleRemoveQuestion = (index: number) => {
@@ -349,89 +358,125 @@ const CreateTestModal = ({ isOpen, onClose, testToEdit }: CreateTestModalProps) 
             </Button>
           </div>
           
-          {/* Список вопросов с возможностью редактирования */}
-          <div className="space-y-4">
-            {questions.map((question, questionIndex) => (
-              <div 
-                key={questionIndex} 
-                className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600"
-              >
-                <div className="flex justify-between items-center mb-3">
-                  <h5 className="font-medium">Вопрос {questionIndex + 1}</h5>
-                  <div className="flex space-x-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemoveQuestion(questionIndex)}
-                      className="p-1 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
-                      disabled={questions.length <= 1}
-                    >
-                      <Trash className="w-5 h-5" />
-                    </Button>
-                  </div>
-                </div>
-                
-                <div className="mb-3">
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Текст вопроса
-                  </label>
-                  <Input
-                    type="text"
-                    value={question.text}
-                    onChange={(e) => handleQuestionTextChange(questionIndex, e.target.value)}
-                    placeholder="Введите вопрос"
-                    className="w-full text-sm"
-                  />
-                </div>
-                
-                <div className="mb-3">
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Варианты ответов
-                  </label>
-                  <div className="space-y-2">
-                    {question.options.map((option, optionIndex) => (
-                      <div key={optionIndex} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`answer_${questionIndex}_${optionIndex}`}
-                          checked={option.isCorrect}
-                          onCheckedChange={(checked) => 
-                            handleOptionCorrectChange(questionIndex, optionIndex, checked === true)
-                          }
-                          className="w-4 h-4"
-                        />
-                        <Input
-                          type="text"
-                          value={option.text}
-                          onChange={(e) => 
-                            handleOptionTextChange(questionIndex, optionIndex, e.target.value)
-                          }
-                          placeholder="Вариант ответа"
-                          className="flex-grow text-sm"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveOption(questionIndex, optionIndex)}
-                          className="text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 p-0"
-                          disabled={question.options.length <= 2}
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleAddOption(questionIndex)}
-                    className="mt-2 text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300 flex items-center p-0"
+          {/* Пагинация для вопросов */}
+          {questions.length > QUESTIONS_PER_PAGE && (
+            <div className="mb-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  Страница {currentPage} из {Math.max(1, Math.ceil(questions.length / QUESTIONS_PER_PAGE))}
+                </span>
+                <div className="flex space-x-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
                   >
-                    <Plus className="w-4 h-4 mr-1" />
-                    Добавить вариант
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Назад
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(questions.length / QUESTIONS_PER_PAGE), prev + 1))}
+                    disabled={currentPage >= Math.ceil(questions.length / QUESTIONS_PER_PAGE)}
+                  >
+                    Далее
+                    <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                 </div>
               </div>
-            ))}
+            </div>
+          )}
+          
+          {/* Список вопросов с возможностью редактирования */}
+          <div className="space-y-4">
+            {questions
+              .slice((currentPage - 1) * QUESTIONS_PER_PAGE, currentPage * QUESTIONS_PER_PAGE)
+              .map((question, displayIndex) => {
+                const questionIndex = (currentPage - 1) * QUESTIONS_PER_PAGE + displayIndex;
+                return (
+                  <div 
+                    key={questionIndex} 
+                    className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600"
+                  >
+                    <div className="flex justify-between items-center mb-3">
+                      <h5 className="font-medium">Вопрос {questionIndex + 1}</h5>
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveQuestion(questionIndex)}
+                          className="p-1 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
+                          disabled={questions.length <= 1}
+                        >
+                          <Trash className="w-5 h-5" />
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="mb-3">
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Текст вопроса
+                      </label>
+                      <Input
+                        type="text"
+                        value={question.text}
+                        onChange={(e) => handleQuestionTextChange(questionIndex, e.target.value)}
+                        placeholder="Введите вопрос"
+                        className="w-full text-sm"
+                      />
+                    </div>
+                    
+                    <div className="mb-3">
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Варианты ответов
+                      </label>
+                      <div className="space-y-2">
+                        {question.options.map((option, optionIndex) => (
+                          <div key={optionIndex} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`answer_${questionIndex}_${optionIndex}`}
+                              checked={option.isCorrect}
+                              onCheckedChange={(checked) => 
+                                handleOptionCorrectChange(questionIndex, optionIndex, checked === true)
+                              }
+                              className="w-4 h-4"
+                            />
+                            <Input
+                              type="text"
+                              value={option.text}
+                              onChange={(e) => 
+                                handleOptionTextChange(questionIndex, optionIndex, e.target.value)
+                              }
+                              placeholder="Вариант ответа"
+                              className="flex-grow text-sm"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveOption(questionIndex, optionIndex)}
+                              className="text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 p-0"
+                              disabled={question.options.length <= 2}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleAddOption(questionIndex)}
+                        className="mt-2 text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300 flex items-center p-0"
+                      >
+                        <Plus className="w-4 h-4 mr-1" />
+                        Добавить вариант
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         </div>
         

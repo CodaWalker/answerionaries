@@ -296,6 +296,55 @@ export const updateTestStatistics = async (result: LocalTestResult): Promise<voi
     // Обновляем статистику по вопросам
     const userAnswers = result.answers;
     
+    // Получаем все вопросы теста с правильными ответами
+    try {
+      // Запрашиваем тест с API или используем кэшированные данные
+      const response = await fetch(`/api/tests/${result.testId}/full`);
+      if (response.ok) {
+        const testData = await response.json();
+        const questions = testData.questions;
+
+        // Обрабатываем каждый вопрос
+        for (const question of questions) {
+          const questionId = question.id;
+          
+          // Создаем запись для вопроса, если ее нет
+          if (!stats.questionStats[questionId]) {
+            stats.questionStats[questionId] = {
+              questionId: questionId,
+              correctCount: 0,
+              incorrectCount: 0,
+              totalCount: 0
+            };
+          }
+          
+          // Получаем правильные ответы для вопроса
+          const correctOptionIds = question.options
+            .filter((option: any) => option.isCorrect)
+            .map((option: any) => option.id);
+          
+          // Получаем ответы пользователя для этого вопроса
+          const userSelectedOptionIds = userAnswers[questionId] || [];
+          
+          // Обновляем счетчики
+          stats.questionStats[questionId].totalCount++;
+          
+          // Сравниваем ответы (ответ считается правильным, если выбраны все правильные варианты и только они)
+          const isCorrect = 
+            userSelectedOptionIds.length === correctOptionIds.length && 
+            userSelectedOptionIds.every(id => correctOptionIds.includes(id));
+          
+          if (isCorrect) {
+            stats.questionStats[questionId].correctCount++;
+          } else {
+            stats.questionStats[questionId].incorrectCount++;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error processing question statistics:', error);
+    }
+    
     // Сохраняем статистику
     await saveTestStatistics(result.testId, stats);
     
