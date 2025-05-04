@@ -9,56 +9,106 @@ import { csvQuestionSchema, csvAnswerSchema, type CsvValidationResult, type CSVQ
  */
 export const parseCSV = async (file: File): Promise<CsvValidationResult> => {
   try {
-    // Парсим файл, разделяя его на две секции: вопросы и ответы
+    // Парсим весь файл
     const text = await readFileAsText(file);
-    const sections = separateSections(text);
     
-    if (!sections.questionsSection || !sections.answersSection) {
+    // Проверяем, содержит ли файл заголовки вопросов и/или ответов
+    const hasQuestionsHeader = text.includes("question_id;question;variants");
+    const hasAnswersHeader = text.includes("question_id;answers");
+    
+    console.log("Найдены заголовки:", { hasQuestionsHeader, hasAnswersHeader });
+    
+    // Если файл содержит только вопросы
+    if (hasQuestionsHeader && !hasAnswersHeader) {
+      const questionsResult = parseQuestions(text);
+      if (!questionsResult.isValid) {
+        return {
+          isValid: false,
+          error: `Ошибка при парсинге вопросов: ${questionsResult.error}`
+        };
+      }
+      
       return {
-        isValid: false,
-        error: "Файл должен содержать две секции: вопросы (question_id;question;variants) и ответы (question_id;answers)"
+        isValid: true,
+        questions: questionsResult.questions,
       };
     }
     
-    // Парсим секции
-    const questionsResult = parseQuestions(sections.questionsSection);
-    const answersResult = parseAnswers(sections.answersSection);
-    
-    // Проверяем наличие ошибок парсинга
-    if (!questionsResult.isValid) {
+    // Если файл содержит только ответы
+    if (!hasQuestionsHeader && hasAnswersHeader) {
+      const answersResult = parseAnswers(text);
+      if (!answersResult.isValid) {
+        return {
+          isValid: false,
+          error: `Ошибка при парсинге ответов: ${answersResult.error}`
+        };
+      }
+      
       return {
-        isValid: false,
-        error: `Ошибка в секции вопросов: ${questionsResult.error}`
+        isValid: true,
+        answers: answersResult.answers,
       };
     }
     
-    if (!answersResult.isValid) {
+    // Если файл содержит и вопросы, и ответы
+    if (hasQuestionsHeader && hasAnswersHeader) {
+      // Разделяем файл на секции
+      const sections = separateSections(text);
+      
+      if (!sections.questionsSection || !sections.answersSection) {
+        return {
+          isValid: false,
+          error: "Не удалось корректно разделить файл на секции вопросов и ответов"
+        };
+      }
+      
+      // Парсим секции
+      const questionsResult = parseQuestions(sections.questionsSection);
+      const answersResult = parseAnswers(sections.answersSection);
+      
+      // Проверяем наличие ошибок парсинга
+      if (!questionsResult.isValid) {
+        return {
+          isValid: false,
+          error: `Ошибка в секции вопросов: ${questionsResult.error}`
+        };
+      }
+      
+      if (!answersResult.isValid) {
+        return {
+          isValid: false,
+          error: `Ошибка в секции ответов: ${answersResult.error}`
+        };
+      }
+      
+      // Проверяем соответствие вопросов и ответов
+      const validationResult = validateQuestionsAndAnswers(
+        questionsResult.questions || [],
+        answersResult.answers || []
+      );
+      
+      if (!validationResult.isValid) {
+        return {
+          isValid: false,
+          error: validationResult.error
+        };
+      }
+      
       return {
-        isValid: false,
-        error: `Ошибка в секции ответов: ${answersResult.error}`
+        isValid: true,
+        questions: questionsResult.questions,
+        answers: answersResult.answers
       };
     }
     
-    // Проверяем соответствие вопросов и ответов
-    const validationResult = validateQuestionsAndAnswers(
-      questionsResult.questions || [],
-      answersResult.answers || []
-    );
-    
-    if (!validationResult.isValid) {
-      return {
-        isValid: false,
-        error: validationResult.error
-      };
-    }
-    
+    // Если ни один заголовок не найден
     return {
-      isValid: true,
-      questions: questionsResult.questions,
-      answers: answersResult.answers
+      isValid: false,
+      error: "Файл должен содержать заголовки question_id;question;variants или question_id;answers"
     };
     
   } catch (error) {
+    console.error("Ошибка при обработке CSV файла:", error);
     return {
       isValid: false,
       error: `Ошибка при обработке файла: ${error instanceof Error ? error.message : String(error)}`
@@ -90,25 +140,38 @@ const readFileAsText = (file: File): Promise<string> => {
  * Разделение файла на секции вопросов и ответов
  */
 const separateSections = (text: string): { questionsSection: string | null; answersSection: string | null } => {
-  // Разделяем файл на строки
-  const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
-  
-  // Находим индексы заголовков секций
-  const questionsHeaderIndex = lines.findIndex(line => line.includes("question_id;question;variants"));
-  const answersHeaderIndex = lines.findIndex(line => line.includes("question_id;answers"));
-  
-  if (questionsHeaderIndex === -1 || answersHeaderIndex === -1) {
+  try {
+    // Разделяем файл на строки
+    const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
+    
+    // Находим индексы заголовков секций
+    const questionsHeaderIndex = lines.findIndex(line => line.includes("question_id;question;variants"));
+    const answersHeaderIndex = lines.findIndex(line => line.includes("question_id;answers"));
+    
+    console.log("Заголовки секций:", { questionsHeaderIndex, answersHeaderIndex });
+    
+    if (questionsHeaderIndex === -1 || answersHeaderIndex === -1) {
+      console.error("Не найдены заголовки секций в CSV файле");
+      return { questionsSection: null, answersSection: null };
+    }
+    
+    // Получаем строки для каждой секции
+    const questionsLines = lines.slice(questionsHeaderIndex, answersHeaderIndex).join("\n");
+    const answersLines = lines.slice(answersHeaderIndex).join("\n");
+    
+    console.log("Количество строк в секциях:", {
+      questions: questionsLines.split("\n").length,
+      answers: answersLines.split("\n").length
+    });
+    
+    return {
+      questionsSection: questionsLines,
+      answersSection: answersLines
+    };
+  } catch (error) {
+    console.error("Ошибка при разделении секций:", error);
     return { questionsSection: null, answersSection: null };
   }
-  
-  // Получаем строки для каждой секции
-  const questionsLines = lines.slice(questionsHeaderIndex, answersHeaderIndex).join("\n");
-  const answersLines = lines.slice(answersHeaderIndex).join("\n");
-  
-  return {
-    questionsSection: questionsLines,
-    answersSection: answersLines
-  };
 };
 
 /**
@@ -119,10 +182,14 @@ const parseQuestions = (text: string): { isValid: boolean; questions?: CSVQuesti
     const result = Papa.parse<CSVQuestion>(text, {
       header: true,
       delimiter: ";",
-      skipEmptyLines: true
+      skipEmptyLines: true,
+      quoteChar: '"',      // Явно указываем символ кавычек
+      escapeChar: '\\',   // Символ экранирования
+      dynamicTyping: false // Отключаем автоматическое преобразование типов
     });
     
     if (result.errors.length > 0) {
+      console.error("CSV parsing error:", result.errors);
       return {
         isValid: false,
         error: `Ошибка парсинга: ${result.errors[0].message}`
@@ -183,10 +250,14 @@ const parseAnswers = (text: string): { isValid: boolean; answers?: CSVAnswer[]; 
     const result = Papa.parse<CSVAnswer>(text, {
       header: true,
       delimiter: ";",
-      skipEmptyLines: true
+      skipEmptyLines: true,
+      quoteChar: '"',      // Явно указываем символ кавычек
+      escapeChar: '\\',   // Символ экранирования
+      dynamicTyping: false // Отключаем автоматическое преобразование типов
     });
     
     if (result.errors.length > 0) {
+      console.error("CSV answers parsing error:", result.errors);
       return {
         isValid: false,
         error: `Ошибка парсинга: ${result.errors[0].message}`
