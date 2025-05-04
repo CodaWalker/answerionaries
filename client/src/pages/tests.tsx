@@ -29,7 +29,7 @@ const ITEMS_PER_PAGE = 6;
 
 const TestsPage = () => {
   const { toast } = useToast();
-  const { setCurrentTest } = useAppContext();
+  const { setCurrentTest, loadSessionForTest, testSession, loadTestStatistics } = useAppContext();
   
   // Состояния
   const [searchTerm, setSearchTerm] = useState("");
@@ -42,6 +42,8 @@ const TestsPage = () => {
   const [selectedTestId, setSelectedTestId] = useState<number | null>(null);
   const [testToDelete, setTestToDelete] = useState<Test | null>(null);
   const [testToEdit, setTestToEdit] = useState<Test | null>(null);
+  const [resumeSessionOpen, setResumeSessionOpen] = useState(false);
+  const [testSessionToResume, setTestSessionToResume] = useState<any>(null);
   
   // Получение списка тестов
   const { data: tests = [], isLoading, error } = useQuery<Test[]>({
@@ -138,7 +140,20 @@ const TestsPage = () => {
       const fullTest = await res.json();
       setCurrentTest(fullTest);
       setSelectedTestId(testId);
-      setIsTestPlayerOpen(true);
+      
+      // Проверяем, есть ли сохраненная сессия
+      const session = await loadSessionForTest(testId);
+      
+      if (session && session.isPaused) {
+        setTestSessionToResume(session);
+        setResumeSessionOpen(true);
+      } else {
+        // Если нет сессии или она не на паузе, открываем тест как обычно
+        setIsTestPlayerOpen(true);
+      }
+      
+      // Загружаем статистику теста
+      await loadTestStatistics(testId);
     } catch (error) {
       toast({
         title: "Ошибка",
@@ -411,7 +426,33 @@ const TestsPage = () => {
         isOpen={isTestPlayerOpen} 
         onClose={() => setIsTestPlayerOpen(false)} 
         testId={selectedTestId}
+        resumeSession={testSessionToResume}
       />
+      
+      {/* Диалог восстановления сессии */}
+      <AlertDialog open={resumeSessionOpen} onOpenChange={setResumeSessionOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Обнаружена сохраненная сессия</AlertDialogTitle>
+            <AlertDialogDescription>
+              У вас есть незавершенный тест. Хотите продолжить с того места, где остановились, или начать заново?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setTestSessionToResume(null);
+              setIsTestPlayerOpen(true);
+            }}>
+              Начать заново
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              setIsTestPlayerOpen(true);
+            }}>
+              Продолжить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       
       {/* Диалог подтверждения удаления */}
       <AlertDialog open={!!testToDelete} onOpenChange={() => setTestToDelete(null)}>
