@@ -540,8 +540,8 @@ const TestPlayer = ({ isOpen, onClose, testId, resumeSession }: TestPlayerProps)
   
   // Отображение вопроса
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl">
+    <Dialog open={isOpen} onOpenChange={isPaused ? undefined : handleClose}>
+      <DialogContent className="max-w-4xl" hideCloseButton={isPaused}>
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-primary">{test.title}</DialogTitle>
         </DialogHeader>
@@ -675,14 +675,19 @@ const TestPlayer = ({ isOpen, onClose, testId, resumeSession }: TestPlayerProps)
           
           <div className="flex gap-3 md:ml-auto">
             <Button 
-              variant="destructive" 
-              onClick={handleFinishTest}
-              disabled={isPaused}
+              variant={isPaused ? "outline" : "destructive"} 
+              onClick={isPaused ? handleClose : handleFinishTest}
               className="px-6 py-2 h-12 text-base font-medium"
               size="lg"
             >
-              Завершить досрочно
-              <ExternalLink className="w-5 h-5 ml-2" />
+              {isPaused ? (
+                "Закрыть"
+              ) : (
+                <>
+                  Завершить досрочно
+                  <ExternalLink className="w-5 h-5 ml-2" />
+                </>
+              )}
             </Button>
             
             {isMultipleChoice(currentQuestion) && currentQuestionIndex < questions.length - 1 ? (

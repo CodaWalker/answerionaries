@@ -20,7 +20,7 @@ const ResultsPage = () => {
   const [timeFilter, setTimeFilter] = useState("all");
   const [scoreFilter, setScoreFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const [setSelectedResult] = useState<Result | null>(null);
+  const [selectedResult, setSelectedResult] = useState<Result | null>(null);
   
   // Получение результатов
   const { data: results = [], isLoading: loadingResults } = useQuery<Result[]>({
@@ -104,8 +104,10 @@ const ResultsPage = () => {
   const handleViewDetails = async (resultId: number) => {
     try {
       // Находим результат локально
-      const result = localResults.find(r => r.id === resultId);
-      setSelectedResult(result || null);
+      const result = results.find((r: any) => r.id === resultId);
+      if (result) {
+        setSelectedResult(result);
+      }
       
       // TODO: В будущем можно реализовать модальное окно с детальным отображением результатов
       toast({
