@@ -116,9 +116,9 @@ const ResultsPage = () => {
           testTitle: getTestName(result.testId),
           score: result.score,
           totalQuestions: result.totalQuestions,
-          answers: result.answers ? JSON.parse(result.answers) : {},
+          answers: result.answers && typeof result.answers === 'string' ? JSON.parse(result.answers) : (typeof result.answers === 'object' ? result.answers : {}),
           date: new Date(result.createdAt),
-          timeTaken: result.timeTaken,
+          timeTaken: result.timeTaken === null ? undefined : result.timeTaken,
           isCompleted: true // Предполагаем, что запись в БД = завершенный тест
         };
         setSelectedResult(localResult);
