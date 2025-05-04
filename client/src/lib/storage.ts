@@ -439,6 +439,52 @@ export const resetTestStatistics = async (testId: number): Promise<boolean> => {
 };
 
 /**
+ * Кэширование тестов для офлайн-режима
+ */
+export const cacheTests = async (tests: any[]): Promise<void> => {
+  try {
+    await localforage.setItem(KEYS.CACHED_TESTS, tests);
+    localStorage.setItem(KEYS.LAST_SYNC, new Date().toISOString());
+  } catch (error) {
+    console.error('Error caching tests:', error);
+  }
+};
+
+/**
+ * Получение кэшированных тестов
+ */
+export const getCachedTests = async (): Promise<any[]> => {
+  try {
+    const tests = await localforage.getItem<any[]>(KEYS.CACHED_TESTS);
+    return tests || [];
+  } catch (error) {
+    console.error('Error getting cached tests:', error);
+    return [];
+  }
+};
+
+/**
+ * Получение кэшированного теста по ID
+ */
+export const getCachedTest = async (testId: number): Promise<any | null> => {
+  try {
+    const tests = await getCachedTests();
+    return tests.find(test => test.id === testId) || null;
+  } catch (error) {
+    console.error('Error getting cached test:', error);
+    return null;
+  }
+};
+
+/**
+ * Получение времени последней синхронизации тестов
+ */
+export const getLastSyncTime = (): Date | null => {
+  const lastSync = localStorage.getItem(KEYS.LAST_SYNC);
+  return lastSync ? new Date(lastSync) : null;
+};
+
+/**
  * Очистка всех данных приложения
  */
 export const clearAllData = async (): Promise<void> => {
@@ -446,6 +492,7 @@ export const clearAllData = async (): Promise<void> => {
     await localforage.clear();
     localStorage.removeItem(KEYS.HAS_SEEN_ONBOARDING);
     localStorage.removeItem(KEYS.THEME);
+    localStorage.removeItem(KEYS.LAST_SYNC);
   } catch (error) {
     console.error('Error clearing all data:', error);
     throw new Error('Не удалось очистить данные');

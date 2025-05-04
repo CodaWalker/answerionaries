@@ -1,6 +1,19 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { TestWithQuestions, TestSession } from "@shared/schema";
-import { getTestResults, LocalTestResult, saveTestSession, getTestSession, deleteTestSession, getTestStatistics, resetTestStatistics as resetTestStats, TestStatistics } from "@/lib/storage";
+import {
+  getTestResults,
+  LocalTestResult,
+  saveTestSession,
+  getTestSession,
+  deleteTestSession,
+  getTestStatistics,
+  resetTestStatistics as resetTestStats,
+  TestStatistics,
+  cacheTests,
+  getCachedTests,
+  getCachedTest,
+  getLastSyncTime
+} from "@/lib/storage";
 
 // Интерфейс контекста приложения
 interface AppContextType {
