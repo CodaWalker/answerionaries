@@ -14,6 +14,7 @@ import { getTestResults } from "@/lib/storage";
 const StatsDisplay = () => {
   const { localResults } = useAppContext();
   const [stats, setStats] = useState({ completed: 0, averageScore: 0 });
+  const [hasResults, setHasResults] = useState(false);
   const { data: testsData } = useQuery<Test[]>({ queryKey: ['/api/tests'] });
   
   useEffect(() => {
@@ -28,14 +29,27 @@ const StatsDisplay = () => {
           : 0;
         
         setStats({ completed, averageScore });
+        setHasResults(completed > 0);
       } catch (error) {
         console.error("Ошибка при расчете статистики:", error);
         setStats({ completed: 0, averageScore: 0 });
+        setHasResults(false);
       }
     };
     
     calculateStats();
   }, [localResults]);
+  
+  if (!hasResults) {
+    return (
+      <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+        У вас пока нет завершенных тестов.
+        <div className="mt-2 text-sm">
+          Пройдите тесты, чтобы увидеть здесь статистику.
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="space-y-4">
