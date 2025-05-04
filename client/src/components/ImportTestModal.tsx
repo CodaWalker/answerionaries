@@ -1,14 +1,15 @@
 import { useState, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { X, Upload } from "lucide-react";
+import { Upload, FileText, CheckCircle2, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { parseCSV } from "@/lib/csv-parser";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { CsvValidationResult, type InsertTest } from "@shared/schema";
+import { CsvValidationResult, type InsertTest, CSVQuestion, CSVAnswer } from "@shared/schema";
+import { Separator } from "@/components/ui/separator";
 
 type ImportTestModalProps = {
   isOpen: boolean;
@@ -17,15 +18,21 @@ type ImportTestModalProps = {
 
 const ImportTestModal = ({ isOpen, onClose }: ImportTestModalProps) => {
   const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const questionsFileInputRef = useRef<HTMLInputElement>(null);
+  const answersFileInputRef = useRef<HTMLInputElement>(null);
   
   // Состояния
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [fileName, setFileName] = useState("");
-  const [isValidating, setIsValidating] = useState(false);
-  const [validationResult, setValidationResult] = useState<CsvValidationResult | null>(null);
+  const [questionsFile, setQuestionsFile] = useState<File | null>(null);
+  const [answersFile, setAnswersFile] = useState<File | null>(null);
+  const [questionsFileName, setQuestionsFileName] = useState("");
+  const [answersFileName, setAnswersFileName] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [questionsData, setQuestionsData] = useState<CSVQuestion[] | null>(null);
+  const [answersData, setAnswersData] = useState<CSVAnswer[] | null>(null);
+  const [step, setStep] = useState<'questions' | 'answers' | 'review'>('questions');
+  const [error, setError] = useState<string | null>(null);
   
   // Мутация для создания теста из CSV
   const importMutation = useMutation({
@@ -56,24 +63,45 @@ const ImportTestModal = ({ isOpen, onClose }: ImportTestModalProps) => {
     }
   });
   
-  // Обработчик выбора файла
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Обработчик выбора файла вопросов
+  const handleQuestionsFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      setFile(selectedFile);
-      setFileName(selectedFile.name);
-      setValidationResult(null);
+      setQuestionsFile(selectedFile);
+      setQuestionsFileName(selectedFile.name);
+      setError(null);
     }
   };
   
-  // Обработчик перетаскивания файла
-  const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+  // Обработчик выбора файла ответов
+  const handleAnswersFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      setAnswersFile(selectedFile);
+      setAnswersFileName(selectedFile.name);
+      setError(null);
+    }
+  };
+  
+  // Обработчик перетаскивания файла вопросов
+  const handleQuestionsFileDrop = (e: React.DragEvent<HTMLLabelElement>) => {
     e.preventDefault();
     const droppedFile = e.dataTransfer.files[0];
     if (droppedFile) {
-      setFile(droppedFile);
-      setFileName(droppedFile.name);
-      setValidationResult(null);
+      setQuestionsFile(droppedFile);
+      setQuestionsFileName(droppedFile.name);
+      setError(null);
+    }
+  };
+  
+  // Обработчик перетаскивания файла ответов
+  const handleAnswersFileDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile) {
+      setAnswersFile(droppedFile);
+      setAnswersFileName(droppedFile.name);
+      setError(null);
     }
   };
   
@@ -82,51 +110,99 @@ const ImportTestModal = ({ isOpen, onClose }: ImportTestModalProps) => {
     e.preventDefault();
   };
   
-  // Обработчик импорта
-  const handleImport = async () => {
-    if (!file) {
-      toast({
-        title: "Выберите файл",
-        description: "Пожалуйста, выберите CSV файл для импорта",
-        variant: "destructive",
-      });
+  // Обработчик загрузки файла вопросов
+  const handleProcessQuestionsFile = async () => {
+    if (!questionsFile) {
+      setError("Выберите файл с вопросами");
       return;
     }
     
     if (!title.trim()) {
-      toast({
-        title: "Введите название",
-        description: "Пожалуйста, введите название теста",
-        variant: "destructive",
-      });
+      setError("Введите название теста");
       return;
     }
     
     try {
-      setIsValidating(true);
+      setIsProcessing(true);
+      setError(null);
       
-      // Парсим и валидируем CSV
-      const result = await parseCSV(file);
-      setValidationResult(result);
+      // Здесь мы используем parseCSV для парсинга вопросов
+      const result = await parseCSV(questionsFile);
       
-      if (!result.isValid || !result.questions || !result.answers) {
-        toast({
-          title: "Ошибка валидации",
-          description: result.error || "Некорректный формат CSV файла",
-          variant: "destructive",
-        });
-        setIsValidating(false);
+      if (!result.isValid || !result.questions) {
+        setError(result.error || "Некорректный формат файла с вопросами");
         return;
       }
       
+      setQuestionsData(result.questions);
+      setStep('answers');
+      
+      toast({
+        title: "Вопросы загружены",
+        description: `Успешно загружено ${result.questions.length} вопросов`,
+      });
+      
+    } catch (error) {
+      console.error("Questions parsing error:", error);
+      setError("Произошла ошибка при обработке файла с вопросами");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
+  // Обработчик загрузки файла ответов
+  const handleProcessAnswersFile = async () => {
+    if (!answersFile) {
+      setError("Выберите файл с ответами");
+      return;
+    }
+    
+    try {
+      setIsProcessing(true);
+      setError(null);
+      
+      const result = await parseCSV(answersFile);
+      
+      if (!result.isValid || !result.answers) {
+        setError(result.error || "Некорректный формат файла с ответами");
+        return;
+      }
+      
+      setAnswersData(result.answers);
+      setStep('review');
+      
+      toast({
+        title: "Ответы загружены",
+        description: `Успешно загружено ${result.answers.length} наборов ответов`,
+      });
+      
+    } catch (error) {
+      console.error("Answers parsing error:", error);
+      setError("Произошла ошибка при обработке файла с ответами");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
+  // Обработчик финального импорта
+  const handleFinalImport = () => {
+    if (!questionsData || !answersData) {
+      setError("Отсутствуют данные вопросов или ответов");
+      return;
+    }
+    
+    try {
+      setIsProcessing(true);
+      setError(null);
+      
       // Преобразуем данные в формат, подходящий для API
-      const questionData = result.questions.map(q => {
+      const questionData = questionsData.map(q => {
         const questionId = q.question_id;
         const questionText = q.question;
         const variants = q.variants.split(',');
         
         // Ищем ответы для этого вопроса
-        const answerItem = result.answers?.find(a => a.question_id === questionId);
+        const answerItem = answersData.find(a => a.question_id === questionId);
         const correctAnswers = answerItem ? answerItem.answers.split(',').map(Number) : [];
         
         // Создаем опции с указанием правильных ответов
@@ -151,13 +227,9 @@ const ImportTestModal = ({ isOpen, onClose }: ImportTestModalProps) => {
       
     } catch (error) {
       console.error("Import error:", error);
-      toast({
-        title: "Ошибка импорта",
-        description: "Произошла ошибка при обработке файла",
-        variant: "destructive",
-      });
+      setError("Произошла ошибка при импорте теста");
     } finally {
-      setIsValidating(false);
+      setIsProcessing(false);
     }
   };
   
@@ -165,110 +237,244 @@ const ImportTestModal = ({ isOpen, onClose }: ImportTestModalProps) => {
   const handleClose = () => {
     setTitle("");
     setDescription("");
-    setFile(null);
-    setFileName("");
-    setValidationResult(null);
+    setQuestionsFile(null);
+    setAnswersFile(null);
+    setQuestionsFileName("");
+    setAnswersFileName("");
+    setQuestionsData(null);
+    setAnswersData(null);
+    setStep('questions');
+    setError(null);
     onClose();
   };
   
+  // Переход к предыдущему шагу
+  const handlePrevStep = () => {
+    if (step === 'answers') {
+      setStep('questions');
+    } else if (step === 'review') {
+      setStep('answers');
+    }
+  };
+  
+  // рендер компонента
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Импорт теста из CSV</DialogTitle>
+          <div className="mt-2 flex justify-center">
+            <div className="flex items-center space-x-2">
+              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${step === 'questions' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}>
+                <FileText className="w-4 h-4" />
+              </div>
+              <div className="h-0.5 w-8 bg-muted" />
+              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${step === 'answers' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}>
+                <FileText className="w-4 h-4" />
+              </div>
+              <div className="h-0.5 w-8 bg-muted" />
+              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${step === 'review' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}>
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+            </div>
+          </div>
         </DialogHeader>
         
-        <div className="mb-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            Файл должен быть в формате CSV и соответствовать требуемой структуре. Пример структуры:
-          </p>
-          <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg text-xs font-mono overflow-x-auto mb-4">
-            <p>question_id;question;variants</p>
-            <p>1;Нозология – это;учение о причинах возникновения болезни,учение об условиях возникновения болезни,общее учение о болезни,учение о механизмах развития болезни</p>
-            <p>...</p>
-            <p>question_id;answers</p>
-            <p>1;3</p>
-            <p>2;1,2</p>
+        {error && (
+          <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-red-600 dark:text-red-400 text-sm">
+            {error}
           </div>
-        </div>
+        )}
         
-        <div className="mb-4">
-          <Label htmlFor="title" className="block text-sm font-medium mb-2">
-            Название теста
-          </Label>
-          <Input
-            id="title"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Введите название теста"
-            className="w-full"
-          />
-        </div>
-        
-        <div className="mb-5">
-          <Label htmlFor="description" className="block text-sm font-medium mb-2">
-            Описание (опционально)
-          </Label>
-          <Input
-            id="description"
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Введите описание теста"
-            className="w-full"
-          />
-        </div>
-        
-        <div className="mb-5">
-          <Label htmlFor="file" className="block text-sm font-medium mb-2">
-            Загрузить файл
-          </Label>
-          <div className="flex items-center justify-center w-full">
-            <Label
-              htmlFor="file-upload"
-              className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500"
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-            >
-              <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                <Upload className="w-8 h-8 mb-3 text-gray-500 dark:text-gray-400" />
-                {fileName ? (
-                  <p className="mb-1 text-sm text-gray-500 dark:text-gray-400">
-                    Выбран файл: <span className="font-semibold">{fileName}</span>
-                  </p>
-                ) : (
-                  <>
-                    <p className="mb-1 text-sm text-gray-500 dark:text-gray-400">
-                      <span className="font-semibold">Нажмите для загрузки</span> или перетащите файл
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">CSV файл (макс. 10MB)</p>
-                  </>
-                )}
-              </div>
-              <input
-                ref={fileInputRef}
-                id="file-upload"
-                type="file"
-                className="hidden"
-                accept=".csv"
-                onChange={handleFileChange}
+        {step === 'questions' && (
+          <>
+            <div className="mb-4">
+              <Label htmlFor="title" className="block text-sm font-medium mb-2">
+                Название теста
+              </Label>
+              <Input
+                id="title"
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Введите название теста"
+                className="w-full"
               />
-            </Label>
-          </div>
-        </div>
+            </div>
+            
+            <div className="mb-4">
+              <Label htmlFor="description" className="block text-sm font-medium mb-2">
+                Описание (опционально)
+              </Label>
+              <Input
+                id="description"
+                type="text"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Введите описание теста"
+                className="w-full"
+              />
+            </div>
+            
+            <div className="mb-4">
+              <h3 className="text-sm font-medium mb-2">Файл с вопросами</h3>
+              <div className="flex items-center justify-center w-full">
+                <Label
+                  htmlFor="questions-file-upload"
+                  className="flex flex-col items-center justify-center w-full h-28 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500"
+                  onDrop={handleQuestionsFileDrop}
+                  onDragOver={handleDragOver}
+                >
+                  <div className="flex flex-col items-center justify-center pt-4 pb-4">
+                    <Upload className="w-6 h-6 mb-2 text-gray-500 dark:text-gray-400" />
+                    {questionsFileName ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Выбран файл: <span className="font-semibold">{questionsFileName}</span>
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          <span className="font-semibold">Загрузите файл с вопросами</span>
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">CSV файл (формат: question_id;question;variants)</p>
+                      </>
+                    )}
+                  </div>
+                  <input
+                    ref={questionsFileInputRef}
+                    id="questions-file-upload"
+                    type="file"
+                    className="hidden"
+                    accept=".csv"
+                    onChange={handleQuestionsFileChange}
+                  />
+                </Label>
+              </div>
+            </div>
+            
+            <DialogFooter>
+              <Button variant="outline" onClick={handleClose}>
+                Отмена
+              </Button>
+              <Button 
+                onClick={handleProcessQuestionsFile} 
+                disabled={!questionsFile || isProcessing}
+              >
+                {isProcessing ? "Обработка..." : "Далее"}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
         
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
-            Отмена
-          </Button>
-          <Button 
-            onClick={handleImport} 
-            disabled={!file || isValidating || importMutation.isPending}
-          >
-            {isValidating || importMutation.isPending ? "Обработка..." : "Импортировать"}
-          </Button>
-        </DialogFooter>
+        {step === 'answers' && (
+          <>
+            <div className="mb-4">
+              <div className="flex justify-between mb-2">
+                <h3 className="text-sm font-medium">Информация о тесте</h3>
+              </div>
+              <div className="bg-muted/50 p-3 rounded-md">
+                <p className="font-medium">{title}</p>
+                {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
+                <div className="mt-2">
+                  <p className="text-sm"><span className="text-muted-foreground">Вопросов:</span> {questionsData?.length}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <h3 className="text-sm font-medium mb-2">Файл с ответами</h3>
+              <div className="flex items-center justify-center w-full">
+                <Label
+                  htmlFor="answers-file-upload"
+                  className="flex flex-col items-center justify-center w-full h-28 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500"
+                  onDrop={handleAnswersFileDrop}
+                  onDragOver={handleDragOver}
+                >
+                  <div className="flex flex-col items-center justify-center pt-4 pb-4">
+                    <Upload className="w-6 h-6 mb-2 text-gray-500 dark:text-gray-400" />
+                    {answersFileName ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Выбран файл: <span className="font-semibold">{answersFileName}</span>
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          <span className="font-semibold">Загрузите файл с ответами</span>
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">CSV файл (формат: question_id;answers)</p>
+                      </>
+                    )}
+                  </div>
+                  <input
+                    ref={answersFileInputRef}
+                    id="answers-file-upload"
+                    type="file"
+                    className="hidden"
+                    accept=".csv"
+                    onChange={handleAnswersFileChange}
+                  />
+                </Label>
+              </div>
+            </div>
+            
+            <DialogFooter className="flex justify-between">
+              <Button variant="outline" onClick={handlePrevStep}>
+                <ChevronLeft className="w-4 h-4 mr-1" /> Назад
+              </Button>
+              <Button 
+                onClick={handleProcessAnswersFile} 
+                disabled={!answersFile || isProcessing}
+              >
+                {isProcessing ? "Обработка..." : "Далее"}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+        
+        {step === 'review' && (
+          <>
+            <div className="mb-4">
+              <h3 className="text-sm font-medium mb-2">Проверьте данные перед импортом</h3>
+              <div className="bg-muted/50 p-3 rounded-md">
+                <p className="font-medium">{title}</p>
+                {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
+                <Separator className="my-2" />
+                <div className="flex justify-between">
+                  <div>
+                    <p className="text-sm"><span className="text-muted-foreground">Вопросов:</span> {questionsData?.length}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm"><span className="text-muted-foreground">Ответов:</span> {answersData?.length}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-800">
+                <div className="flex">
+                  <CheckCircle2 className="text-green-500 w-5 h-5 mr-2 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-green-800 dark:text-green-300">Данные готовы к импорту</p>
+                    <p className="text-sm text-green-600 dark:text-green-400 mt-1">Нажмите кнопку "Импортировать", чтобы завершить процесс.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <DialogFooter className="flex justify-between">
+              <Button variant="outline" onClick={handlePrevStep}>
+                <ChevronLeft className="w-4 h-4 mr-1" /> Назад
+              </Button>
+              <Button 
+                onClick={handleFinalImport} 
+                disabled={isProcessing || importMutation.isPending}
+              >
+                {isProcessing || importMutation.isPending ? "Обработка..." : "Импортировать"}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
