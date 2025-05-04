@@ -9,8 +9,22 @@ import { csvQuestionSchema, csvAnswerSchema, type CsvValidationResult, type CSVQ
  */
 export const parseCSV = async (file: File): Promise<CsvValidationResult> => {
   try {
+    console.log('Начало парсинга CSV файла:', file.name, 'Size:', file.size, 'bytes');
+    
     // Парсим весь файл
     const text = await readFileAsText(file);
+    
+    // Выводим первые 100 символов для анализа
+    console.log('Первые 100 символов файла:', text.substring(0, 100));
+    
+    // Анализируем строки
+    const lines = text.split(/\r?\n/);
+    console.log('Всего строк в файле:', lines.length);
+    
+    if (lines.length > 0) {
+      console.log('Первая строка:', lines[0]);
+      if (lines.length > 1) console.log('Вторая строка:', lines[1]);
+    }
     
     // Проверяем, содержит ли файл заголовки вопросов и/или ответов
     const hasQuestionsHeader = text.includes("question_id;question;variants");
@@ -250,11 +264,30 @@ const parseQuestions = (text: string): { isValid: boolean; questions?: CSVQuesti
  */
 const parseAnswers = (text: string): { isValid: boolean; answers?: CSVAnswer[]; error?: string } => {
   try {
+    console.log('Начало парсинга ответов, длина текста:', text.length, 'символов');
+    
     // Предварительная обработка текста - удаляем все кавычки
     let processedText = text.replace(/"/g, ""); // Удаляем все двойные кавычки из текста
     
+    // Анализ строк в файле ответов
+    const lines = processedText.split(/\r?\n/);
+    console.log('Строки в файле ответов:', lines.length);
+    for(let i = 0; i < Math.min(5, lines.length); i++) {
+      console.log(`Строка ${i} в файле ответов:`, lines[i]);
+    }
+    
     console.log("Исходный текст ответов (обработанный):", processedText.substring(0, 100));
     
+    // Проверяем наличие заголовка
+    if (!processedText.includes("question_id;answers")) {
+      console.error('Ошибка: файл ответов не содержит заголовок "question_id;answers"');
+      return {
+        isValid: false,
+        error: 'Файл ответов должен содержать заголовок "question_id;answers"'
+      };
+    }
+    
+    console.log('Начинаем парсинг с PapaParse...');
     const result = Papa.parse<CSVAnswer>(processedText, {
       header: true,
       delimiter: ";",
@@ -262,11 +295,17 @@ const parseAnswers = (text: string): { isValid: boolean; answers?: CSVAnswer[]; 
       dynamicTyping: false  // Отключаем автоматическое преобразование типов
     });
     
+    console.log('Результат парсинга:', { 
+      data: result.data.length, 
+      errors: result.errors.length,
+      meta: result.meta
+    });
+    
     if (result.errors.length > 0) {
       console.error("CSV answers parsing error:", result.errors);
       return {
         isValid: false,
-        error: `Ошибка парсинга: ${result.errors[0].message}`
+        error: `Ошибка парсинга: ${result.errors[0].message}. Строка: ${result.errors[0].row}, Код: ${result.errors[0].code}`
       };
     }
     

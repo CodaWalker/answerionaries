@@ -161,10 +161,14 @@ const ImportTestModal = ({ isOpen, onClose }: ImportTestModalProps) => {
       setIsProcessing(true);
       setError(null);
       
+      console.log('Обработка файла с ответами:', answersFile.name);
       const result = await parseCSV(answersFile);
+      console.log('Результат парсинга ответов:', result);
       
       if (!result.isValid || !result.answers) {
-        setError(result.error || "Некорректный формат файла с ответами");
+        const errorMessage = result.error || "Некорректный формат файла с ответами";
+        console.error('Ошибка парсинга ответов:', errorMessage);
+        setError(errorMessage);
         return;
       }
       
@@ -282,7 +286,8 @@ const ImportTestModal = ({ isOpen, onClose }: ImportTestModalProps) => {
         
         {error && (
           <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-red-600 dark:text-red-400 text-sm">
-            {error}
+            <div className="font-medium mb-1">Ошибка импорта:</div>
+            <div>{error}</div>
           </div>
         )}
         
