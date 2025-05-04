@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Result, Test } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
+import TestResultDetails from "@/components/TestResultDetails";
+import { LocalTestResult } from "@/lib/storage";
 
 // Параметры пагинации
 const ITEMS_PER_PAGE = 8;
@@ -20,7 +22,8 @@ const ResultsPage = () => {
   const [timeFilter, setTimeFilter] = useState("all");
   const [scoreFilter, setScoreFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedResult, setSelectedResult] = useState<Result | null>(null);
+  const [selectedResult, setSelectedResult] = useState<LocalTestResult | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   
   // Получение результатов
   const { data: results = [], isLoading: loadingResults } = useQuery<Result[]>({
@@ -106,21 +109,34 @@ const ResultsPage = () => {
       // Находим результат локально
       const result = results.find((r: any) => r.id === resultId);
       if (result) {
-        setSelectedResult(result);
+        // Преобразуем Result в LocalTestResult
+        const localResult: LocalTestResult = {
+          id: result.id,
+          testId: result.testId,
+          testTitle: getTestName(result.testId),
+          score: result.score,
+          totalQuestions: result.totalQuestions,
+          answers: result.answers ? JSON.parse(result.answers) : {},
+          date: new Date(result.createdAt),
+          timeTaken: result.timeTaken,
+          isCompleted: true // Предполагаем, что запись в БД = завершенный тест
+        };
+        setSelectedResult(localResult);
+        setIsDetailsOpen(true);
       }
-      
-      // TODO: В будущем можно реализовать модальное окно с детальным отображением результатов
-      toast({
-        title: "Просмотр результатов",
-        description: "Детальный просмотр результатов в разработке",
-      });
     } catch (error) {
+      console.error("Error loading result details:", error);
       toast({
         title: "Ошибка",
         description: "Не удалось загрузить детали результата",
         variant: "destructive",
       });
     }
+  };
+  
+  // Закрытие модального окна с деталями
+  const handleCloseDetails = () => {
+    setIsDetailsOpen(false);
   };
   
   // Получение названия теста по ID
