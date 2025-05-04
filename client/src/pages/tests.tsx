@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Test } from "@shared/schema";
+import { Test, TestWithQuestions } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import ImportTestModal from "@/components/ImportTestModal";
 import CreateTestModal from "@/components/CreateTestModal";
@@ -41,7 +41,7 @@ const TestsPage = () => {
   const [isTestPlayerOpen, setIsTestPlayerOpen] = useState(false);
   const [selectedTestId, setSelectedTestId] = useState<number | null>(null);
   const [testToDelete, setTestToDelete] = useState<Test | null>(null);
-  const [testToEdit, setTestToEdit] = useState<Test | null>(null);
+  const [testToEdit, setTestToEdit] = useState<TestWithQuestions | null>(null);
   const [resumeSessionOpen, setResumeSessionOpen] = useState(false);
   const [testSessionToResume, setTestSessionToResume] = useState<any>(null);
   
@@ -122,7 +122,7 @@ const TestsPage = () => {
   const handleEditTest = async (test: Test) => {
     try {
       const res = await apiRequest('GET', `/api/tests/${test.id}/full`);
-      const fullTest = await res.json();
+      const fullTest = await res.json() as TestWithQuestions;
       setTestToEdit(fullTest);
       setIsCreateModalOpen(true);
     } catch (error) {
@@ -438,11 +438,23 @@ const TestsPage = () => {
               У вас есть незавершенный тест. Хотите продолжить с того места, где остановились, или начать заново?
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {
-              setTestSessionToResume(null);
-              setIsTestPlayerOpen(true);
-            }}>
+          <AlertDialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button 
+              variant="outline"
+              onClick={() => {
+                setTestSessionToResume(null);
+                setResumeSessionOpen(false);
+              }} 
+              className="sm:mr-auto text-gray-500 border-gray-300"
+            >
+              Выйти
+            </Button>
+            <AlertDialogCancel 
+              onClick={() => {
+                setTestSessionToResume(null);
+                setIsTestPlayerOpen(true);
+              }}
+            >
               Начать заново
             </AlertDialogCancel>
             <AlertDialogAction onClick={() => {
