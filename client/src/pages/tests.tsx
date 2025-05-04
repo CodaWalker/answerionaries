@@ -29,7 +29,7 @@ const ITEMS_PER_PAGE = 6;
 
 const TestsPage = () => {
   const { toast } = useToast();
-  const { setCurrentTest, loadSessionForTest, testSession, loadTestStatistics } = useAppContext();
+  const { setCurrentTest, loadSessionForTest, testSession, loadTestStatistics, resetTestStatistics } = useAppContext();
   
   // Состояния
   const [searchTerm, setSearchTerm] = useState("");

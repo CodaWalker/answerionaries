@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { TestWithQuestions, TestSession } from "@shared/schema";
-import { getTestResults, LocalTestResult, saveTestSession, getTestSession, deleteTestSession, getTestStatistics, TestStatistics } from "@/lib/storage";
+import { getTestResults, LocalTestResult, saveTestSession, getTestSession, deleteTestSession, getTestStatistics, resetTestStatistics as resetTestStats, TestStatistics } from "@/lib/storage";
 
 // Интерфейс контекста приложения
 interface AppContextType {
@@ -15,6 +15,7 @@ interface AppContextType {
   refreshLocalResults: () => Promise<void>;
   testStatistics: TestStatistics | null;
   loadTestStatistics: (testId: number) => Promise<void>;
+  resetTestStatistics: (testId: number) => Promise<boolean>;
 }
 
 // Создание контекста
@@ -95,6 +96,30 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   };
   
+  // Сброс статистики теста
+  const resetTestStatistics = async (testId: number): Promise<boolean> => {
+    try {
+      const success = await resetTestStats(testId);
+      if (success && testStatistics?.testId === testId) {
+        // Обнуляем текущие данные статистики, если они относятся к сбрасываемому тесту
+        setTestStatistics({
+          testId,
+          totalAttempts: 0,
+          successfulAttempts: 0,
+          averageScore: 0,
+          bestScore: 0,
+          worstScore: 0,
+          averageTime: 0,
+          questionStats: {}
+        });
+      }
+      return success;
+    } catch (error) {
+      console.error("Ошибка при сбросе статистики теста:", error);
+      return false;
+    }
+  };
+  
   // Значение контекста
   const value: AppContextType = {
     currentTest,
@@ -107,7 +132,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     localResults,
     refreshLocalResults,
     testStatistics,
-    loadTestStatistics
+    loadTestStatistics,
+    resetTestStatistics
   };
   
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
