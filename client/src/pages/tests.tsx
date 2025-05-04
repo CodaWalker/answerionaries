@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Plus, Upload, List, Grid2X2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Plus, Upload, List, Grid2X2, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Test, TestWithQuestions } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { deleteAllTestResultsForTest } from "@/lib/storage";
 import ImportTestModal from "@/components/ImportTestModal";
 import CreateTestModal from "@/components/CreateTestModal";
 import TestPlayer from "@/components/TestPlayer";
@@ -118,16 +119,34 @@ const TestsPage = () => {
       const isLastOnPage = paginatedTests.length === 1;
       // Проверяем, находимся ли мы на последней странице
       const isLastPage = currentPage === totalPages;
+      const testId = testToDelete.id;
       
-      deleteTestMutation.mutate(testToDelete.id, {
-        onSuccess: () => {
-          // Если это был последний элемент на последней странице и не первая страница,
-          // переходим на предыдущую страницу
-          if (isLastOnPage && isLastPage && currentPage > 1) {
-            setCurrentPage(currentPage - 1);
+      // Перед удалением теста удаляем все его результаты и сбрасываем статистику
+      Promise.all([
+        deleteAllTestResultsForTest(testId),
+        resetTestStatistics(testId)
+      ]).then(() => {
+        // Теперь удаляем сам тест
+        deleteTestMutation.mutate(testId, {
+          onSuccess: () => {
+            // Если это был последний элемент на последней странице и не первая страница,
+            // переходим на предыдущую страницу
+            if (isLastOnPage && isLastPage && currentPage > 1) {
+              setCurrentPage(currentPage - 1);
+            }
+            
+            toast({
+              title: "Тест удален",
+              description: "Тест, его результаты и статистика были успешно удалены",
+            });
           }
-        }
+        });
+      }).catch(error => {
+        console.error("Ошибка при очистке данных теста:", error);
+        // Удаляем тест даже если не удалось очистить результаты
+        deleteTestMutation.mutate(testId);
       });
+      
       setTestToDelete(null);
     }
   };
@@ -142,6 +161,34 @@ const TestsPage = () => {
       toast({
         title: "Ошибка",
         description: "Не удалось загрузить тест для редактирования",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Обработчик сброса статистики теста
+  const handleResetStatistics = async (testId: number) => {
+    try {
+      const success = await resetTestStatistics(testId);
+      if (success) {
+        // Удаляем все результаты для этого теста
+        await deleteAllTestResultsForTest(testId);
+        toast({
+          title: "Статистика сброшена",
+          description: "Статистика и результаты теста успешно сброшены",
+        });
+      } else {
+        toast({
+          title: "Ошибка",
+          description: "Не удалось сбросить статистику теста",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Ошибка при сбросе статистики:", error);
+      toast({
+        title: "Ошибка",
+        description: "Не удалось сбросить статистику теста",
         variant: "destructive"
       });
     }
@@ -361,8 +408,17 @@ const TestsPage = () => {
                   <Button 
                     variant="outline" 
                     onClick={() => handleEditTest(test)}
+                    className="mr-2"
                   >
                     Редактировать
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => handleResetStatistics(test.id)}
+                    className="text-amber-600 border-amber-600 hover:text-amber-700 hover:border-amber-700"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-1" />
+                    Сброс
                   </Button>
                 </div>
               </CardContent>
