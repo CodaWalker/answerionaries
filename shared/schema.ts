@@ -139,6 +139,9 @@ export type TestSession = {
   isPaused?: boolean; // находится ли тест на паузе
   correctAnswers?: number; // количество правильных ответов
   wrongAnswers?: number; // количество неправильных ответов
+  questionPriorities?: Record<number, number>; // questionId -> приоритет (чем выше, тем раньше показывается)
+  questionOrder?: number[]; // порядок вопросов (ID вопросов)
+  optionsOrder?: Record<number, number[]>; // questionId -> порядок опций
 };
 
 export type TestStatistics = {

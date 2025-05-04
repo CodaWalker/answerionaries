@@ -38,6 +38,9 @@ const TestPlayer = ({ isOpen, onClose, testId, resumeSession }: TestPlayerProps)
   const [lastPauseTime, setLastPauseTime] = useState<Date | null>(null);
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [wrongAnswers, setWrongAnswers] = useState(0);
+  const [questionOrder, setQuestionOrder] = useState<number[]>([]);
+  const [questionPriorities, setQuestionPriorities] = useState<Record<number, number>>({});
+  const [optionsOrder, setOptionsOrder] = useState<Record<number, number[]>>({});
   
   // Таймер для обновления времени
   const intervalRef = useRef<NodeJS.Timeout | null>(null);

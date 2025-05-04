@@ -42,8 +42,10 @@ const KEYS = {
   TEST_RESULTS: 'test_results',
   TEST_SESSIONS: 'test_sessions',
   TEST_STATISTICS: 'test_statistics',
+  CACHED_TESTS: 'cached_tests',
   THEME: 'theme',
-  HAS_SEEN_ONBOARDING: 'hasSeenOnboarding'
+  HAS_SEEN_ONBOARDING: 'hasSeenOnboarding',
+  LAST_SYNC: 'last_sync'
 };
 
 /**
