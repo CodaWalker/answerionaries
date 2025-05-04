@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +9,53 @@ import TestPlayer from "@/components/TestPlayer";
 import { apiRequest } from "@/lib/queryClient";
 import { type Test } from "@shared/schema";
 import { useAppContext } from "@/context/AppContext";
+import { getTestResults } from "@/lib/storage";
+
+const StatsDisplay = () => {
+  const { localResults } = useAppContext();
+  const [stats, setStats] = useState({ completed: 0, averageScore: 0 });
+  const { data: testsData } = useQuery<Test[]>({ queryKey: ['/api/tests'] });
+  
+  useEffect(() => {
+    const calculateStats = async () => {
+      try {
+        const completedResults = localResults.filter(result => result.isCompleted);
+        const completed = completedResults.length;
+        
+        // Если нет завершенных тестов, используем 0
+        const averageScore = completed > 0 
+          ? Math.round(completedResults.reduce((sum, result) => sum + (result.score / result.totalQuestions * 100), 0) / completed) 
+          : 0;
+        
+        setStats({ completed, averageScore });
+      } catch (error) {
+        console.error("Ошибка при расчете статистики:", error);
+        setStats({ completed: 0, averageScore: 0 });
+      }
+    };
+    
+    calculateStats();
+  }, [localResults]);
+  
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <span className="text-gray-600 dark:text-gray-400">Пройдено тестов</span>
+        <span className="font-medium">{stats.completed}</span>
+      </div>
+      <div className="h-px bg-gray-200 dark:bg-gray-700"></div>
+      <div className="flex justify-between items-center">
+        <span className="text-gray-600 dark:text-gray-400">Средний балл</span>
+        <span className="font-medium">{stats.averageScore > 0 ? `${stats.averageScore}%` : '-'}</span>
+      </div>
+      <div className="h-px bg-gray-200 dark:bg-gray-700"></div>
+      <div className="flex justify-between items-center">
+        <span className="text-gray-600 dark:text-gray-400">Созданных тестов</span>
+        <span className="font-medium">{testsData ? testsData.length : 0}</span>
+      </div>
+    </div>
+  );
+};
 
 const HomePage = () => {
   const [location, setLocation] = useLocation();
@@ -135,22 +182,7 @@ const HomePage = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-5 border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold mb-4">Моя статистика</h3>
           
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Пройдено тестов</span>
-              <span className="font-medium">{0}</span>
-            </div>
-            <div className="h-px bg-gray-200 dark:bg-gray-700"></div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Средний балл</span>
-              <span className="font-medium">-</span>
-            </div>
-            <div className="h-px bg-gray-200 dark:bg-gray-700"></div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Созданных тестов</span>
-              <span className="font-medium">{tests?.length || 0}</span>
-            </div>
-          </div>
+          <StatsDisplay />
         </div>
         
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-5 border border-gray-200 dark:border-gray-700">

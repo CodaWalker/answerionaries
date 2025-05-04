@@ -179,13 +179,16 @@ const separateSections = (text: string): { questionsSection: string | null; answ
  */
 const parseQuestions = (text: string): { isValid: boolean; questions?: CSVQuestion[]; error?: string } => {
   try {
-    const result = Papa.parse<CSVQuestion>(text, {
+    // Предварительная обработка текста - удаляем все кавычки
+    let processedText = text.replace(/"/g, ""); // Удаляем все двойные кавычки из текста
+    
+    console.log("Исходный текст вопросов (обработанный):", processedText.substring(0, 100));
+    
+    const result = Papa.parse<CSVQuestion>(processedText, {
       header: true,
       delimiter: ";",
       skipEmptyLines: true,
-      quoteChar: '"',      // Явно указываем символ кавычек
-      escapeChar: '\\',   // Символ экранирования
-      dynamicTyping: false // Отключаем автоматическое преобразование типов
+      dynamicTyping: false  // Отключаем автоматическое преобразование типов
     });
     
     if (result.errors.length > 0) {
@@ -220,9 +223,9 @@ const parseQuestions = (text: string): { isValid: boolean; questions?: CSVQuesti
     
     // Проверка на дубликаты question_id
     const questionIds = result.data.map(q => q.question_id);
-    const uniqueIds = new Set(questionIds);
+    const uniqueQuestionIds = [...new Set(questionIds)];
     
-    if (uniqueIds.size !== questionIds.length) {
+    if (uniqueQuestionIds.length !== questionIds.length) {
       return {
         isValid: false,
         error: "Найдены дубликаты question_id в секции вопросов"
@@ -247,13 +250,16 @@ const parseQuestions = (text: string): { isValid: boolean; questions?: CSVQuesti
  */
 const parseAnswers = (text: string): { isValid: boolean; answers?: CSVAnswer[]; error?: string } => {
   try {
-    const result = Papa.parse<CSVAnswer>(text, {
+    // Предварительная обработка текста - удаляем все кавычки
+    let processedText = text.replace(/"/g, ""); // Удаляем все двойные кавычки из текста
+    
+    console.log("Исходный текст ответов (обработанный):", processedText.substring(0, 100));
+    
+    const result = Papa.parse<CSVAnswer>(processedText, {
       header: true,
       delimiter: ";",
       skipEmptyLines: true,
-      quoteChar: '"',      // Явно указываем символ кавычек
-      escapeChar: '\\',   // Символ экранирования
-      dynamicTyping: false // Отключаем автоматическое преобразование типов
+      dynamicTyping: false  // Отключаем автоматическое преобразование типов
     });
     
     if (result.errors.length > 0) {
@@ -280,9 +286,9 @@ const parseAnswers = (text: string): { isValid: boolean; answers?: CSVAnswer[]; 
     
     // Проверка на дубликаты question_id
     const answerIds = result.data.map(a => a.question_id);
-    const uniqueIds = new Set(answerIds);
+    const uniqueAnswerIds = [...new Set(answerIds)];
     
-    if (uniqueIds.size !== answerIds.length) {
+    if (uniqueAnswerIds.length !== answerIds.length) {
       return {
         isValid: false,
         error: "Найдены дубликаты question_id в секции ответов"
@@ -310,11 +316,12 @@ const validateQuestionsAndAnswers = (
   answers: CSVAnswer[]
 ): { isValid: boolean; error?: string } => {
   // Проверка наличия ответов для всех вопросов
-  const questionIds = new Set(questions.map(q => q.question_id));
-  const answerIds = new Set(answers.map(a => a.question_id));
+  const questionIds = questions.map(q => q.question_id);
+  const answerIds = answers.map(a => a.question_id);
   
+  // Проверка наличия ответа для каждого вопроса
   for (const qId of questionIds) {
-    if (!answerIds.has(qId)) {
+    if (!answerIds.includes(qId)) {
       return {
         isValid: false,
         error: `Отсутствует ответ для вопроса с ID ${qId}`
@@ -324,7 +331,7 @@ const validateQuestionsAndAnswers = (
   
   // Проверка на лишние ответы
   for (const aId of answerIds) {
-    if (!questionIds.has(aId)) {
+    if (!questionIds.includes(aId)) {
       return {
         isValid: false,
         error: `Найден ответ для несуществующего вопроса с ID ${aId}`
