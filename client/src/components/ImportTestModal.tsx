@@ -11,6 +11,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { CsvValidationResult, type InsertTest, CSVQuestion, CSVAnswer } from "@shared/schema";
 import { Separator } from "@/components/ui/separator";
 
+// Функция для чтения файла как текст
+const readFileAsText = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        resolve(e.target.result as string);
+      } else {
+        reject(new Error("Не удалось прочитать файл"));
+      }
+    };
+    reader.onerror = () => {
+      reject(new Error("Ошибка при чтении файла"));
+    };
+    reader.readAsText(file);
+  });
+};
+
 type ImportTestModalProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -162,6 +180,16 @@ const ImportTestModal = ({ isOpen, onClose }: ImportTestModalProps) => {
       setError(null);
       
       console.log('Обработка файла с ответами:', answersFile.name);
+      const fileContent = await readFileAsText(answersFile);
+      
+      // Проверяем, что в файле есть заголовок для ответов
+      if (!fileContent.includes("question_id;answers")) {
+        const errorMessage = "В файле ответов отсутствует заголовок 'question_id;answers'. Убедитесь, что вы загрузили правильный файл ответов.";
+        console.error('Ошибка парсинга ответов:', errorMessage);
+        setError(errorMessage);
+        return;
+      }
+      
       const result = await parseCSV(answersFile);
       console.log('Результат парсинга ответов:', result);
       

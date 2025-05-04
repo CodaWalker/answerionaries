@@ -193,14 +193,31 @@ const separateSections = (text: string): { questionsSection: string | null; answ
  */
 const parseQuestions = (text: string): { isValid: boolean; questions?: CSVQuestion[]; error?: string } => {
   try {
-    // Предварительная обработка текста - удаляем все кавычки
-    let processedText = text.replace(/"/g, ""); // Удаляем все двойные кавычки из текста
+    // Предварительная обработка текста
+    // Для улучшения совместимости, попробуем несколько вариантов разделителей
+    // удаляем все кавычки - это помогает избежать проблем с кавычками в строках
+    let processedText = text.replace(/"/g, ""); 
     
     console.log("Исходный текст вопросов (обработанный):", processedText.substring(0, 100));
     
+    // Пытаемся определить разделитель автоматически
+    const firstLine = processedText.split(/\r?\n/)[0] || "";
+    let delimiter = ";";
+    
+    // Проверяем наличие разных разделителей в первой строке
+    if (firstLine.includes(',') && !firstLine.includes(';')) {
+      delimiter = ",";
+      console.log("Выбран разделитель: 'запятая'");
+    } else if (firstLine.includes('\t') && !firstLine.includes(';')) {
+      delimiter = "\t";
+      console.log("Выбран разделитель: 'табуляция'");
+    } else {
+      console.log("Выбран разделитель: 'точка с запятой'");
+    }
+    
     const result = Papa.parse<CSVQuestion>(processedText, {
       header: true,
-      delimiter: ";",
+      delimiter: delimiter,
       skipEmptyLines: true,
       dynamicTyping: false  // Отключаем автоматическое преобразование типов
     });
