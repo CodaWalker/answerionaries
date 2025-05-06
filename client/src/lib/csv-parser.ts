@@ -10,28 +10,28 @@ import { csvQuestionSchema, csvAnswerSchema, type CsvValidationResult, type CSVQ
 export const parseCSV = async (file: File): Promise<CsvValidationResult> => {
   try {
     console.log('Начало парсинга CSV файла:', file.name, 'Size:', file.size, 'bytes');
-    
+
     // Парсим весь файл
     const text = await readFileAsText(file);
-    
+
     // Выводим первые 100 символов для анализа
     console.log('Первые 100 символов файла:', text.substring(0, 100));
-    
+
     // Анализируем строки
     const lines = text.split(/\r?\n/);
     console.log('Всего строк в файле:', lines.length);
-    
+
     if (lines.length > 0) {
       console.log('Первая строка:', lines[0]);
       if (lines.length > 1) console.log('Вторая строка:', lines[1]);
     }
-    
+
     // Проверяем, содержит ли файл заголовки вопросов и/или ответов
     const hasQuestionsHeader = text.includes("question_id;question;variants");
     const hasAnswersHeader = text.includes("question_id;answers");
-    
+
     console.log("Найдены заголовки:", { hasQuestionsHeader, hasAnswersHeader });
-    
+
     // Если файл содержит только вопросы
     if (hasQuestionsHeader && !hasAnswersHeader) {
       const questionsResult = parseQuestions(text);
@@ -41,13 +41,13 @@ export const parseCSV = async (file: File): Promise<CsvValidationResult> => {
           error: `Ошибка при парсинге вопросов: ${questionsResult.error}`
         };
       }
-      
+
       return {
         isValid: true,
         questions: questionsResult.questions,
       };
     }
-    
+
     // Если файл содержит только ответы
     if (!hasQuestionsHeader && hasAnswersHeader) {
       const answersResult = parseAnswers(text);
@@ -57,29 +57,29 @@ export const parseCSV = async (file: File): Promise<CsvValidationResult> => {
           error: `Ошибка при парсинге ответов: ${answersResult.error}`
         };
       }
-      
+
       return {
         isValid: true,
         answers: answersResult.answers,
       };
     }
-    
+
     // Если файл содержит и вопросы, и ответы
     if (hasQuestionsHeader && hasAnswersHeader) {
       // Разделяем файл на секции
       const sections = separateSections(text);
-      
+
       if (!sections.questionsSection || !sections.answersSection) {
         return {
           isValid: false,
           error: "Не удалось корректно разделить файл на секции вопросов и ответов"
         };
       }
-      
+
       // Парсим секции
       const questionsResult = parseQuestions(sections.questionsSection);
       const answersResult = parseAnswers(sections.answersSection);
-      
+
       // Проверяем наличие ошибок парсинга
       if (!questionsResult.isValid) {
         return {
@@ -87,40 +87,40 @@ export const parseCSV = async (file: File): Promise<CsvValidationResult> => {
           error: `Ошибка в секции вопросов: ${questionsResult.error}`
         };
       }
-      
+
       if (!answersResult.isValid) {
         return {
           isValid: false,
           error: `Ошибка в секции ответов: ${answersResult.error}`
         };
       }
-      
+
       // Проверяем соответствие вопросов и ответов
       const validationResult = validateQuestionsAndAnswers(
         questionsResult.questions || [],
         answersResult.answers || []
       );
-      
+
       if (!validationResult.isValid) {
         return {
           isValid: false,
           error: validationResult.error
         };
       }
-      
+
       return {
         isValid: true,
         questions: questionsResult.questions,
         answers: answersResult.answers
       };
     }
-    
+
     // Если ни один заголовок не найден
     return {
       isValid: false,
       error: "Файл должен содержать заголовки question_id;question;variants или question_id;answers"
     };
-    
+
   } catch (error) {
     console.error("Ошибка при обработке CSV файла:", error);
     return {
@@ -133,7 +133,7 @@ export const parseCSV = async (file: File): Promise<CsvValidationResult> => {
 /**
  * Функция для чтения файла как текст
  */
-const readFileAsText = (file: File): Promise<string> => {
+export function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -157,27 +157,27 @@ const separateSections = (text: string): { questionsSection: string | null; answ
   try {
     // Разделяем файл на строки
     const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
-    
+
     // Находим индексы заголовков секций
     const questionsHeaderIndex = lines.findIndex(line => line.includes("question_id;question;variants"));
     const answersHeaderIndex = lines.findIndex(line => line.includes("question_id;answers"));
-    
+
     console.log("Заголовки секций:", { questionsHeaderIndex, answersHeaderIndex });
-    
+
     if (questionsHeaderIndex === -1 || answersHeaderIndex === -1) {
       console.error("Не найдены заголовки секций в CSV файле");
       return { questionsSection: null, answersSection: null };
     }
-    
+
     // Получаем строки для каждой секции
     const questionsLines = lines.slice(questionsHeaderIndex, answersHeaderIndex).join("\n");
     const answersLines = lines.slice(answersHeaderIndex).join("\n");
-    
+
     console.log("Количество строк в секциях:", {
       questions: questionsLines.split("\n").length,
       answers: answersLines.split("\n").length
     });
-    
+
     return {
       questionsSection: questionsLines,
       answersSection: answersLines
@@ -196,14 +196,14 @@ const parseQuestions = (text: string): { isValid: boolean; questions?: CSVQuesti
     // Предварительная обработка текста
     // Для улучшения совместимости, попробуем несколько вариантов разделителей
     // удаляем все кавычки - это помогает избежать проблем с кавычками в строках
-    let processedText = text.replace(/"/g, ""); 
-    
+    let processedText = text.replace(/"/g, "");
+
     console.log("Исходный текст вопросов (обработанный):", processedText.substring(0, 100));
-    
+
     // Пытаемся определить разделитель автоматически
     const firstLine = processedText.split(/\r?\n/)[0] || "";
     let delimiter = ";";
-    
+
     // Проверяем наличие разных разделителей в первой строке
     if (firstLine.includes(',') && !firstLine.includes(';')) {
       delimiter = ",";
@@ -214,14 +214,14 @@ const parseQuestions = (text: string): { isValid: boolean; questions?: CSVQuesti
     } else {
       console.log("Выбран разделитель: 'точка с запятой'");
     }
-    
+
     const result = Papa.parse<CSVQuestion>(processedText, {
       header: true,
       delimiter: delimiter,
       skipEmptyLines: true,
       dynamicTyping: false  // Отключаем автоматическое преобразование типов
     });
-    
+
     if (result.errors.length > 0) {
       console.error("CSV parsing error:", result.errors);
       return {
@@ -229,7 +229,7 @@ const parseQuestions = (text: string): { isValid: boolean; questions?: CSVQuesti
         error: `Ошибка парсинга: ${result.errors[0].message}`
       };
     }
-    
+
     // Валидация каждого вопроса
     for (const question of result.data) {
       try {
@@ -242,7 +242,7 @@ const parseQuestions = (text: string): { isValid: boolean; questions?: CSVQuesti
           };
         }
       }
-      
+
       // Проверка вариантов ответов
       if (!question.variants || question.variants.split(',').length < 2) {
         return {
@@ -251,12 +251,12 @@ const parseQuestions = (text: string): { isValid: boolean; questions?: CSVQuesti
         };
       }
     }
-    
+
     // Проверка на дубликаты question_id
     const questionIds = result.data.map(q => q.question_id);
     const uniqueIds = new Map();
     let hasDuplicates = false;
-    
+
     // Проверка на дубликаты без использования Set
     for (const id of questionIds) {
       if (uniqueIds.has(id)) {
@@ -265,19 +265,19 @@ const parseQuestions = (text: string): { isValid: boolean; questions?: CSVQuesti
       }
       uniqueIds.set(id, true);
     }
-    
+
     if (hasDuplicates) {
       return {
         isValid: false,
         error: "Найдены дубликаты question_id в секции вопросов"
       };
     }
-    
+
     return {
       isValid: true,
       questions: result.data
     };
-    
+
   } catch (error) {
     return {
       isValid: false,
@@ -292,19 +292,19 @@ const parseQuestions = (text: string): { isValid: boolean; questions?: CSVQuesti
 const parseAnswers = (text: string): { isValid: boolean; answers?: CSVAnswer[]; error?: string } => {
   try {
     console.log('Начало парсинга ответов, длина текста:', text.length, 'символов');
-    
+
     // Предварительная обработка текста - удаляем все кавычки
     let processedText = text.replace(/"/g, ""); // Удаляем все двойные кавычки из текста
-    
+
     // Анализ строк в файле ответов
     const lines = processedText.split(/\r?\n/);
     console.log('Строки в файле ответов:', lines.length);
     for(let i = 0; i < Math.min(5, lines.length); i++) {
       console.log(`Строка ${i} в файле ответов:`, lines[i]);
     }
-    
+
     console.log("Исходный текст ответов (обработанный):", processedText.substring(0, 100));
-    
+
     // Проверяем наличие заголовка
     if (!processedText.includes("question_id;answers")) {
       console.error('Ошибка: файл ответов не содержит заголовок "question_id;answers"');
@@ -313,7 +313,7 @@ const parseAnswers = (text: string): { isValid: boolean; answers?: CSVAnswer[]; 
         error: 'Файл ответов должен содержать заголовок "question_id;answers"'
       };
     }
-    
+
     console.log('Начинаем парсинг с PapaParse...');
     const result = Papa.parse<CSVAnswer>(processedText, {
       header: true,
@@ -321,13 +321,13 @@ const parseAnswers = (text: string): { isValid: boolean; answers?: CSVAnswer[]; 
       skipEmptyLines: true,
       dynamicTyping: false  // Отключаем автоматическое преобразование типов
     });
-    
-    console.log('Результат парсинга:', { 
-      data: result.data.length, 
+
+    console.log('Результат парсинга:', {
+      data: result.data.length,
       errors: result.errors.length,
       meta: result.meta
     });
-    
+
     if (result.errors.length > 0) {
       console.error("CSV answers parsing error:", result.errors);
       return {
@@ -335,7 +335,7 @@ const parseAnswers = (text: string): { isValid: boolean; answers?: CSVAnswer[]; 
         error: `Ошибка парсинга: ${result.errors[0].message}. Строка: ${result.errors[0].row}, Код: ${result.errors[0].code}`
       };
     }
-    
+
     // Валидация каждого ответа
     for (const answer of result.data) {
       try {
@@ -349,12 +349,12 @@ const parseAnswers = (text: string): { isValid: boolean; answers?: CSVAnswer[]; 
         }
       }
     }
-    
+
     // Проверка на дубликаты question_id
     const answerIds = result.data.map(a => a.question_id);
     const uniqueIds = new Map();
     let hasDuplicates = false;
-    
+
     // Проверка на дубликаты без использования Set
     for (const id of answerIds) {
       if (uniqueIds.has(id)) {
@@ -363,19 +363,19 @@ const parseAnswers = (text: string): { isValid: boolean; answers?: CSVAnswer[]; 
       }
       uniqueIds.set(id, true);
     }
-    
+
     if (hasDuplicates) {
       return {
         isValid: false,
         error: "Найдены дубликаты question_id в секции ответов"
       };
     }
-    
+
     return {
       isValid: true,
       answers: result.data
     };
-    
+
   } catch (error) {
     return {
       isValid: false,
@@ -394,7 +394,7 @@ const validateQuestionsAndAnswers = (
   // Проверка наличия ответов для всех вопросов
   const questionIds = questions.map(q => q.question_id);
   const answerIds = answers.map(a => a.question_id);
-  
+
   // Проверка наличия ответа для каждого вопроса
   for (const qId of questionIds) {
     if (!answerIds.includes(qId)) {
@@ -404,7 +404,7 @@ const validateQuestionsAndAnswers = (
       };
     }
   }
-  
+
   // Проверка на лишние ответы
   for (const aId of answerIds) {
     if (!questionIds.includes(aId)) {
@@ -414,15 +414,15 @@ const validateQuestionsAndAnswers = (
       };
     }
   }
-  
+
   // Проверка валидности ответов
   for (const answer of answers) {
     const question = questions.find(q => q.question_id === answer.question_id);
     if (!question) continue;
-    
+
     const answerIndices = answer.answers.split(',').map(a => parseInt(a.trim()));
     const variantsCount = question.variants.split(',').length;
-    
+
     // Проверка индексов ответов
     for (const idx of answerIndices) {
       if (isNaN(idx) || idx < 1 || idx > variantsCount) {
@@ -432,7 +432,7 @@ const validateQuestionsAndAnswers = (
         };
       }
     }
-    
+
     // Проверка, что не все варианты отмечены как правильные
     if (answerIndices.length === variantsCount) {
       return {
@@ -440,7 +440,7 @@ const validateQuestionsAndAnswers = (
         error: `Для вопроса ${answer.question_id} все варианты отмечены как правильные`
       };
     }
-    
+
     // Проверка, что есть хотя бы один правильный вариант
     if (answerIndices.length === 0) {
       return {
@@ -449,6 +449,6 @@ const validateQuestionsAndAnswers = (
       };
     }
   }
-  
+
   return { isValid: true };
 };

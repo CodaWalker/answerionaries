@@ -55,25 +55,25 @@ export const saveTestResult = async (result: LocalTestResult): Promise<void> => 
   try {
     // Получаем существующие результаты
     const existingResults = await getTestResults();
-    
+
     // Генерируем новый ID
-    const newId = existingResults.length > 0 
-      ? Math.max(...existingResults.map(r => r.id || 0)) + 1 
+    const newId = existingResults.length > 0
+      ? Math.max(...existingResults.map(r => r.id || 0)) + 1
       : 1;
-    
+
     // Сохраняем новый результат
-    const newResult = { 
-      ...result, 
+    const newResult = {
+      ...result,
       id: newId,
       isCompleted: result.isCompleted !== undefined ? result.isCompleted : true
     };
     await localforage.setItem(KEYS.TEST_RESULTS, [newResult, ...existingResults]);
-    
+
     // Обновляем статистику теста
     if (result.isCompleted !== false) {
       await updateTestStatistics(newResult);
     }
-    
+
   } catch (error) {
     console.error('Error saving test result:', error);
     throw new Error('Не удалось сохранить результат теста');
@@ -113,7 +113,7 @@ export const deleteTestResult = async (resultId: number): Promise<boolean> => {
   try {
     const results = await getTestResults();
     const updatedResults = results.filter(result => result.id !== resultId);
-    
+
     await localforage.setItem(KEYS.TEST_RESULTS, updatedResults);
     return true;
   } catch (error) {
@@ -129,7 +129,7 @@ export const deleteAllTestResultsForTest = async (testId: number): Promise<boole
   try {
     const results = await getTestResults();
     const updatedResults = results.filter(result => result.testId !== testId);
-    
+
     await localforage.setItem(KEYS.TEST_RESULTS, updatedResults);
     return true;
   } catch (error) {
@@ -172,29 +172,29 @@ export const setTheme = (theme: string): void => {
 export const exportResultsToCSV = async (): Promise<string> => {
   try {
     const results = await getTestResults();
-    
+
     if (results.length === 0) {
       throw new Error('Нет результатов для экспорта');
     }
-    
+
     // Заголовки CSV
     const headers = [
-      'ID', 
-      'Тест ID', 
-      'Название теста', 
-      'Баллы', 
-      'Всего вопросов', 
-      'Процент', 
+      'ID',
+      'Тест ID',
+      'Название теста',
+      'Баллы',
+      'Всего вопросов',
+      'Процент',
       'Время (сек)',
       'Завершен',
       'Дата'
     ].join(',');
-    
+
     // Строки данных
     const rows = results.map(result => {
       const percent = ((result.score / result.totalQuestions) * 100).toFixed(2);
       const date = new Date(result.date).toLocaleString();
-      
+
       return [
         result.id,
         result.testId,
@@ -207,10 +207,10 @@ export const exportResultsToCSV = async (): Promise<string> => {
         `"${date}"`
       ].join(',');
     });
-    
+
     // Объединяем все в CSV строку
     return [headers, ...rows].join('\n');
-    
+
   } catch (error) {
     console.error('Error exporting results to CSV:', error);
     throw new Error('Не удалось экспортировать результаты');
@@ -224,10 +224,10 @@ export const saveTestSession = async (testId: number, session: any): Promise<voi
   try {
     // Получаем существующие сессии
     const sessions = await localforage.getItem<Record<number, any>>(KEYS.TEST_SESSIONS) || {};
-    
+
     // Сохраняем сессию для конкретного теста
     sessions[testId] = session;
-    
+
     await localforage.setItem(KEYS.TEST_SESSIONS, sessions);
   } catch (error) {
     console.error('Error saving test session:', error);
@@ -254,13 +254,13 @@ export const getTestSession = async (testId: number): Promise<any | null> => {
 export const deleteTestSession = async (testId: number): Promise<boolean> => {
   try {
     const sessions = await localforage.getItem<Record<number, any>>(KEYS.TEST_SESSIONS) || {};
-    
+
     if (sessions[testId]) {
       delete sessions[testId];
       await localforage.setItem(KEYS.TEST_SESSIONS, sessions);
       return true;
     }
-    
+
     return false;
   } catch (error) {
     console.error('Error deleting test session:', error);
@@ -276,28 +276,28 @@ export const updateTestStatistics = async (result: LocalTestResult): Promise<voi
     const stats = await getTestStatistics(result.testId);
     const score = (result.score / result.totalQuestions) * 100;
     const isSuccessful = score >= 60;
-    
+
     // Обновляем общие данные
     stats.totalAttempts++;
     if (isSuccessful) stats.successfulAttempts++;
-    
+
     // Считаем средний балл
     const totalScorePoints = stats.averageScore * (stats.totalAttempts - 1);
     stats.averageScore = (totalScorePoints + score) / stats.totalAttempts;
-    
+
     // Обновляем лучший/худший результат
     stats.bestScore = Math.max(stats.bestScore, score);
     stats.worstScore = stats.worstScore === 0 ? score : Math.min(stats.worstScore, score);
-    
+
     // Обновляем среднее время
     if (result.timeTaken) {
       const totalTime = stats.averageTime * (stats.totalAttempts - 1);
       stats.averageTime = (totalTime + result.timeTaken) / stats.totalAttempts;
     }
-    
+
     // Обновляем статистику по вопросам
     const userAnswers = result.answers;
-    
+
     // Получаем все вопросы теста с правильными ответами
     try {
       // Запрашиваем тест с API или используем кэшированные данные
@@ -309,7 +309,7 @@ export const updateTestStatistics = async (result: LocalTestResult): Promise<voi
         // Обрабатываем каждый вопрос
         for (const question of questions) {
           const questionId = question.id;
-          
+
           // Создаем запись для вопроса, если ее нет
           if (!stats.questionStats[questionId]) {
             stats.questionStats[questionId] = {
@@ -319,23 +319,23 @@ export const updateTestStatistics = async (result: LocalTestResult): Promise<voi
               totalCount: 0
             };
           }
-          
+
           // Получаем правильные ответы для вопроса
           const correctOptionIds = question.options
             .filter((option: any) => option.isCorrect)
             .map((option: any) => option.id);
-          
+
           // Получаем ответы пользователя для этого вопроса
           const userSelectedOptionIds = userAnswers[questionId] || [];
-          
+
           // Обновляем счетчики
           stats.questionStats[questionId].totalCount++;
-          
+
           // Сравниваем ответы (ответ считается правильным, если выбраны все правильные варианты и только они)
-          const isCorrect = 
-            userSelectedOptionIds.length === correctOptionIds.length && 
+          const isCorrect =
+            userSelectedOptionIds.length === correctOptionIds.length &&
             userSelectedOptionIds.every(id => correctOptionIds.includes(id));
-          
+
           if (isCorrect) {
             stats.questionStats[questionId].correctCount++;
           } else {
@@ -346,10 +346,10 @@ export const updateTestStatistics = async (result: LocalTestResult): Promise<voi
     } catch (error) {
       console.error('Error processing question statistics:', error);
     }
-    
+
     // Сохраняем статистику
     await saveTestStatistics(result.testId, stats);
-    
+
   } catch (error) {
     console.error('Error updating test statistics:', error);
   }
@@ -361,12 +361,12 @@ export const updateTestStatistics = async (result: LocalTestResult): Promise<voi
 export const getTestStatistics = async (testId: number): Promise<TestStatistics> => {
   try {
     const allStats = await localforage.getItem<Record<number, TestStatistics>>(KEYS.TEST_STATISTICS) || {};
-    
+
     // Если статистика для теста существует, возвращаем ее
     if (allStats[testId]) {
       return allStats[testId];
     }
-    
+
     // Иначе создаем новую статистику
     return {
       testId,
@@ -378,7 +378,7 @@ export const getTestStatistics = async (testId: number): Promise<TestStatistics>
       averageTime: 0,
       questionStats: {}
     };
-    
+
   } catch (error) {
     console.error('Error getting test statistics:', error);
     // Возвращаем пустую статистику в случае ошибки
@@ -414,7 +414,7 @@ export const saveTestStatistics = async (testId: number, stats: TestStatistics):
 export const resetTestStatistics = async (testId: number): Promise<boolean> => {
   try {
     const allStats = await localforage.getItem<Record<number, TestStatistics>>(KEYS.TEST_STATISTICS) || {};
-    
+
     if (allStats[testId]) {
       allStats[testId] = {
         testId,
@@ -426,11 +426,11 @@ export const resetTestStatistics = async (testId: number): Promise<boolean> => {
         averageTime: 0,
         questionStats: {}
       };
-      
+
       await localforage.setItem(KEYS.TEST_STATISTICS, allStats);
       return true;
     }
-    
+
     return false;
   } catch (error) {
     console.error('Error resetting test statistics:', error);
