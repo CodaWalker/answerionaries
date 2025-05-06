@@ -46,12 +46,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [testSession, setTestSession] = useState<TestSession | null>(null);
   const [localResults, setLocalResults] = useState<LocalTestResult[]>([]);
   const [testStatistics, setTestStatistics] = useState<TestStatistics | null>(null);
-  
+
   // Загрузка локальных результатов при инициализации
   useEffect(() => {
-    refreshLocalResults();
+    refreshLocalResults().then(r => {console.log(r)});
   }, []);
-  
+
   // Функция обновления локальных результатов
   const refreshLocalResults = async (): Promise<void> => {
     try {
@@ -61,7 +61,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       console.error("Ошибка при загрузке локальных результатов:", error);
     }
   };
-  
+
   // Функция сохранения текущей сессии
   const saveCurrentSession = async (): Promise<void> => {
     if (testSession && currentTest) {
@@ -72,7 +72,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       }
     }
   };
-  
+
   // Загрузка сессии для теста
   const loadSessionForTest = async (testId: number): Promise<TestSession | null> => {
     try {
@@ -86,7 +86,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       return null;
     }
   };
-  
+
   // Очистка сессии
   const clearSession = async (testId: number): Promise<void> => {
     try {
@@ -98,7 +98,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       console.error("Ошибка при очистке сессии:", error);
     }
   };
-  
+
   // Загрузка статистики теста
   const loadTestStatistics = async (testId: number): Promise<void> => {
     try {
@@ -108,7 +108,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       console.error("Ошибка при загрузке статистики теста:", error);
     }
   };
-  
+
   // Сброс статистики теста
   const resetTestStatistics = async (testId: number): Promise<boolean> => {
     try {
@@ -132,7 +132,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       return false;
     }
   };
-  
+
   // Значение контекста
   const value: AppContextType = {
     currentTest,
@@ -146,19 +146,19 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     refreshLocalResults,
     testStatistics,
     loadTestStatistics,
-    resetTestStatistics
+    resetTestStatistics,
   };
-  
+
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
 
 // Хук для использования контекста
 export const useAppContext = (): AppContextType => {
   const context = useContext(AppContext);
-  
+
   if (context === undefined) {
     throw new Error("useAppContext должен использоваться внутри AppProvider");
   }
-  
+
   return context;
 };
